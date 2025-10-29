@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
  * MCP Server for TPASS Calculator
+ * Supports both stdio and HTTP transports
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -14,8 +15,9 @@ import { APP_INFO } from '../../config.js';
 
 /**
  * Create and configure MCP server
+ * This server instance can be used with any transport (stdio or HTTP)
  */
-function createServer(): Server {
+export function createServer(): Server {
   const server = new Server(
     {
       name: APP_INFO.name,
