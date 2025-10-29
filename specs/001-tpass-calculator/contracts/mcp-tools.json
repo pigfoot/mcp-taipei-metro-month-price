@@ -1,0 +1,174 @@
+{
+  "$schema": "https://modelcontextprotocol.org/schema/tools.json",
+  "name": "taipei-metro-tpass",
+  "version": "1.0.0",
+  "description": "TPASS monthly pass calculator for Taipei Metro",
+  "tools": [
+    {
+      "name": "calculate_fare",
+      "description": "Calculate and compare TPASS monthly pass vs regular fare with frequent rider discount",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Start date for TPASS validity period (YYYY-MM-DD). Defaults to today if not specified."
+          },
+          "oneWayFare": {
+            "type": "number",
+            "minimum": 1,
+            "description": "One-way fare amount in NTD. Defaults to 40 if not specified."
+          },
+          "tripsPerDay": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of trips per working day. Defaults to 2 (round trip) if not specified."
+          },
+          "customWorkingDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Override calculated working days with custom value. Optional."
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["tpassCost", "regularCost", "recommendation", "savingsAmount"],
+        "properties": {
+          "tpassCost": {
+            "type": "number",
+            "description": "Cost of TPASS monthly pass (always 1200 NTD)"
+          },
+          "regularCost": {
+            "type": "number",
+            "description": "Total cost using regular fare with applicable discount"
+          },
+          "regularCostBeforeDiscount": {
+            "type": "number",
+            "description": "Total cost before applying frequent rider discount"
+          },
+          "savingsAmount": {
+            "type": "number",
+            "description": "Amount saved by choosing the recommended option (negative if TPASS costs more)"
+          },
+          "savingsPercentage": {
+            "type": "number",
+            "description": "Percentage saved by choosing the recommended option"
+          },
+          "recommendation": {
+            "type": "string",
+            "enum": ["BUY_TPASS", "USE_REGULAR"],
+            "description": "Recommendation based on cost comparison"
+          },
+          "recommendationReason": {
+            "type": "string",
+            "description": "Human-readable explanation of the recommendation"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "workingDays": {
+                "type": "integer",
+                "description": "Number of working days in the 30-day period"
+              },
+              "totalTrips": {
+                "type": "integer",
+                "description": "Total number of trips calculated"
+              },
+              "discountRate": {
+                "type": "number",
+                "description": "Applied discount rate (0.05 for 5%, 0.10 for 10%, etc.)"
+              },
+              "discountTier": {
+                "type": "string",
+                "description": "Description of applied discount tier"
+              },
+              "periodStart": {
+                "type": "string",
+                "format": "date",
+                "description": "Start date of TPASS validity period"
+              },
+              "periodEnd": {
+                "type": "string",
+                "format": "date",
+                "description": "End date of TPASS validity period (start + 30 days)"
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Any warnings (e.g., past date selected, calendar data unavailable)"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_discount_info",
+      "description": "Get information about Taipei Metro frequent rider discount tiers",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["discountTiers", "validityPeriod"],
+        "properties": {
+          "discountTiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "minTrips": {
+                  "type": "integer",
+                  "description": "Minimum trips for this tier"
+                },
+                "maxTrips": {
+                  "type": ["integer", "null"],
+                  "description": "Maximum trips for this tier (null for highest tier)"
+                },
+                "discountPercentage": {
+                  "type": "integer",
+                  "description": "Discount percentage (5, 10, 15)"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Human-readable description of the tier"
+                }
+              }
+            }
+          },
+          "validityPeriod": {
+            "type": "string",
+            "description": "Description of discount validity period (e.g., 'Calendar month')"
+          },
+          "resetCycle": {
+            "type": "string",
+            "description": "When discounts reset (e.g., 'First day of each month')"
+          },
+          "tpassInfo": {
+            "type": "object",
+            "properties": {
+              "price": {
+                "type": "number",
+                "description": "TPASS monthly pass price"
+              },
+              "validityDays": {
+                "type": "integer",
+                "description": "Number of days TPASS is valid"
+              },
+              "benefits": {
+                "type": "string",
+                "description": "Description of TPASS benefits"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

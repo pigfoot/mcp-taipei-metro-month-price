@@ -1,0 +1,45 @@
+{
+  "name": "mcp-taipei-metro-month-price",
+  "version": "1.0.0",
+  "description": "TPASS monthly pass calculator for Taipei Metro - MCP server implementation",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "mcp-server": "bun run src/adapters/mcp/server.ts",
+    "calculate": "bun run src/cli/calculate-cmd.ts",
+    "discount": "bun run src/cli/discount-cmd.ts",
+    "calendar:update": "bun run src/cli/calendar-cmd.ts update",
+    "calendar:status": "bun run src/cli/calendar-cmd.ts status",
+    "calendar:view": "bun run src/cli/calendar-cmd.ts view",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "bun test"
+  },
+  "keywords": [
+    "taipei-metro",
+    "tpass",
+    "mcp",
+    "fare-calculator",
+    "model-context-protocol"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.2"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://openai.com/apps/schema/functions.json",
+  "name": "taipei-metro-tpass",
+  "version": "1.0.0",
+  "description": "TPASS monthly pass calculator for Taipei Metro",
+  "functions": [
+    {
+      "name": "calculateTPASSComparison",
+      "description": "Calculate and compare TPASS monthly pass (NT$1,200 for 30 days) versus Taipei Metro regular fare with frequent rider discount (5%-15% based on trip count)",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "description": "Start date for TPASS validity period in YYYY-MM-DD format. If not provided, uses today's date."
+          },
+          "oneWayFare": {
+            "type": "number",
+            "description": "One-way fare amount in New Taiwan Dollars (NTD). Default is 40 NTD if not specified."
+          },
+          "tripsPerDay": {
+            "type": "number",
+            "description": "Number of trips per working day. Default is 2 (round trip) if not specified."
+          },
+          "customWorkingDays": {
+            "type": "number",
+            "description": "Optional: Override the calculated working days with a custom value (0-30)."
+          }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "recommendation": {
+            "type": "string",
+            "enum": ["BUY_TPASS", "USE_REGULAR"],
+            "description": "The recommended option based on cost comparison"
+          },
+          "tpassCost": {
+            "type": "number",
+            "description": "Cost of TPASS monthly pass (always NT$1,200)"
+          },
+          "regularCost": {
+            "type": "number",
+            "description": "Total cost using regular fare after applying frequent rider discount"
+          },
+          "savings": {
+            "type": "number",
+            "description": "Amount saved in NTD by choosing the recommended option"
+          },
+          "savingsPercentage": {
+            "type": "number",
+            "description": "Percentage saved by choosing the recommended option"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Human-readable explanation of the calculation and recommendation"
+          },
+          "calculationDetails": {
+            "type": "object",
+            "description": "Detailed breakdown of the calculation",
+            "properties": {
+              "workingDays": {
+                "type": "number",
+                "description": "Number of working days in the 30-day period"
+              },
+              "totalTrips": {
+                "type": "number",
+                "description": "Total number of trips (workingDays × tripsPerDay)"
+              },
+              "discountRate": {
+                "type": "number",
+                "description": "Applied discount rate (0.05 for 5%, 0.10 for 10%, 0.15 for 15%)"
+              },
+              "discountTier": {
+                "type": "string",
+                "description": "Which discount tier was applied based on trip count"
+              },
+              "validityPeriod": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "Start date of the 30-day TPASS period"
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "End date of the 30-day TPASS period"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "getDiscountInformation",
+      "description": "Get detailed information about Taipei Metro frequent rider discount program and TPASS benefits",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "frequentRiderProgram": {
+            "type": "object",
+            "description": "Details about the frequent rider discount program",
+            "properties": {
+              "discountTiers": {
+                "type": "array",
+                "description": "List of discount tiers based on monthly trip count",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tripRange": {
+                      "type": "string",
+                      "description": "Range of trips for this tier (e.g., '11-20 trips')"
+                    },
+                    "discount": {
+                      "type": "string",
+                      "description": "Discount percentage (e.g., '5%')"
+                    }
+                  }
+                }
+              },
+              "resetCycle": {
+                "type": "string",
+                "description": "When the trip count resets (e.g., 'Monthly on the 1st')"
+              },
+              "eligibility": {
+                "type": "string",
+                "description": "Who can use this discount program"
+              }
+            }
+          },
+          "tpassProgram": {
+            "type": "object",
+            "description": "Details about the TPASS monthly pass",
+            "properties": {
+              "price": {
+                "type": "string",
+                "description": "Monthly pass price (e.g., 'NT$1,200')"
+              },
+              "validity": {
+                "type": "string",
+                "description": "How long the pass is valid (e.g., '30 consecutive days')"
+              },
+              "benefits": {
+                "type": "array",
+                "description": "List of TPASS benefits",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "coverage": {
+                "type": "string",
+                "description": "Which transportation systems are covered"
+              }
+            }
+          },
+          "comparisonTip": {
+            "type": "string",
+            "description": "General advice on when TPASS is beneficial"
+          }
+        }
+      }
+    }
+  ]
+}
