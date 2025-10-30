@@ -14,7 +14,7 @@ This document defines the data structures and relationships for the HTTP MCP Ser
 Configuration for the HTTP MCP server.
 
 **Fields**:
-- `port: number` - HTTP server port (from MCP_PORT env var, default 8080)
+- `port: number` - HTTP server port (from MCP_PORT env var, default 3000)
 - `logLevel: string` - Logging verbosity ("info" | "debug" | "error")
 - `cachePath: string` - Path to calendar cache file
 

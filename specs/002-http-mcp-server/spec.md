@@ -33,7 +33,7 @@ An administrator or automated system needs to start and verify that the MCP serv
 
 **Acceptance Scenarios**:
 
-1. **Given** the server is not running, **When** the administrator runs `bun run server` with proper configuration, **Then** the server starts successfully and listens on the port specified by MCP_PORT environment variable (default 8080 if not set)
+1. **Given** the server is not running, **When** the administrator runs `bun run server` with proper configuration, **Then** the server starts successfully and listens on the port specified by MCP_PORT environment variable (default 3000 if not set)
 2. **Given** the server is running, **When** a health check request is sent to /healthz, **Then** the server responds with a success status and server information
 3. **Given** the server configuration is invalid, **When** attempting to start the server, **Then** clear error messages are displayed indicating the configuration issue
 
@@ -132,7 +132,7 @@ A system administrator needs to deploy the MCP server in a containerized environ
 - **FR-008**: System MUST log all tool executions with structured format including timestamp, tool name, request/response summaries (excluding sensitive data), execution time, and outcome status
 - **FR-009**: Server MUST gracefully handle shutdown signals to prevent data loss
 - **FR-010**: System MUST be deployable in containerized environments with proper configuration
-- **FR-011**: Server MUST read port configuration from MCP_PORT environment variable, defaulting to 8080 if not specified
+- **FR-011**: Server MUST read port configuration from MCP_PORT environment variable, defaulting to 3000 if not specified
 - **FR-018**: Server MUST be startable using `bun run server` command
 - **FR-012**: System MUST provide `bun run update-deps` command that checks for newer versions of all dependencies
 - **FR-013**: Update command MUST automatically update packages to latest minor/patch versions within the same major version

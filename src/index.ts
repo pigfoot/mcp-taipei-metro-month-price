@@ -72,7 +72,7 @@ async function main() {
     console.log('  bun run calendar:status - Check calendar cache status');
     console.log('');
     console.log('To start HTTP server, set MCP_PORT environment variable:');
-    console.log('  MCP_PORT=8080 bun run server');
+    console.log('  MCP_PORT=3000 bun run server');
     console.log('');
   }
 }

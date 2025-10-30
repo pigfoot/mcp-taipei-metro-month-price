@@ -14,7 +14,7 @@
 ### 1. Start the Server
 
 ```bash
-# Default configuration (port 8080)
+# Default configuration (port 3000)
 bun run server
 
 # Custom port
@@ -29,16 +29,16 @@ Expected output:
 🚀 MCP HTTP Server starting...
 ✓ Calendar cache loaded from data/calendar-cache.json
 ✓ MCP transport connected (stateless mode)
-✓ Server listening on http://localhost:8080
-  - Health check: http://localhost:8080/healthz
-  - MCP endpoint: http://localhost:8080/mcp
+✓ Server listening on http://localhost:3000
+  - Health check: http://localhost:3000/healthz
+  - MCP endpoint: http://localhost:3000/mcp
 📊 Registered tools: calculate_tpass_value, get_discount_info
 ```
 
 ### 2. Verify Health
 
 ```bash
-curl http://localhost:8080/healthz
+curl http://localhost:3000/healthz
 ```
 
 Expected response:
@@ -61,7 +61,7 @@ Expected response:
 ### 3. Test MCP Tool
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -84,7 +84,7 @@ curl -X POST http://localhost:8080/mcp \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_PORT` | `8080` | HTTP server port |
+| `MCP_PORT` | `3000` | HTTP server port |
 | `LOG_LEVEL` | `info` | Logging level (debug, info, error) |
 | `CACHE_PATH` | `data/calendar-cache.json` | Calendar cache file path |
 
@@ -92,7 +92,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Development**:
 ```bash
-MCP_PORT=8080 LOG_LEVEL=debug bun run server
+MCP_PORT=3000 LOG_LEVEL=debug bun run server
 ```
 
 **Production**:
@@ -121,13 +121,13 @@ podman build -t mcp-taipei-metro-server .
 
 ```bash
 # Default configuration
-docker run -p 8080:8080 mcp-taipei-metro-server
+docker run -p 3000:3000 mcp-taipei-metro-server
 
 # Custom port
 docker run -p 3000:3000 -e MCP_PORT=3000 mcp-taipei-metro-server
 
 # With volume mount for cache
-docker run -p 8080:8080 \
+docker run -p 3000:3000 \
   -v $(pwd)/data:/app/data \
   mcp-taipei-metro-server
 ```
@@ -139,7 +139,7 @@ docker run -p 8080:8080 \
 docker ps  # Check HEALTH status
 
 # Manual health check
-curl http://localhost:8080/healthz
+curl http://localhost:3000/healthz
 ```
 
 ## Testing
@@ -147,7 +147,7 @@ curl http://localhost:8080/healthz
 ### List Available Tools
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -159,7 +159,7 @@ curl -X POST http://localhost:8080/mcp \
 ### Calculate TPASS Value
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -180,7 +180,7 @@ curl -X POST http://localhost:8080/mcp \
 
 ```javascript
 // JavaScript client example
-const eventSource = new EventSource('http://localhost:8080/mcp');
+const eventSource = new EventSource('http://localhost:3000/mcp');
 
 eventSource.onmessage = (event) => {
   const message = JSON.parse(event.data);
@@ -196,7 +196,7 @@ eventSource.onerror = (error) => {
 ### Using curl for SSE
 
 ```bash
-curl -N -H "Accept: text/event-stream" http://localhost:8080/mcp
+curl -N -H "Accept: text/event-stream" http://localhost:3000/mcp
 ```
 
 ## Package Update Command
@@ -229,13 +229,13 @@ bun run update-deps --major
 
 **Problem**: Port already in use
 ```
-Error: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::3000
 ```
 
 **Solution**: Use different port or kill process
 ```bash
 # Find process using port
-lsof -i :8080
+lsof -i :3000
 
 # Kill process
 kill -9 <PID>
@@ -259,7 +259,7 @@ LOG_LEVEL=debug bun run server
 
 **Solution**: Check tool schema
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
@@ -291,10 +291,10 @@ bun --watch run server
 
 ```bash
 # Health check
-curl http://localhost:8080/healthz
+curl http://localhost:3000/healthz
 
 # Tool test
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
@@ -321,7 +321,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "taipei-metro": {
-      "url": "http://localhost:8080/mcp",
+      "url": "http://localhost:3000/mcp",
       "transport": "http"
     }
   }
@@ -335,7 +335,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const transport = new StreamableHTTPClientTransport({
-  url: 'http://localhost:8080/mcp'
+  url: 'http://localhost:3000/mcp'
 });
 
 const client = new Client(

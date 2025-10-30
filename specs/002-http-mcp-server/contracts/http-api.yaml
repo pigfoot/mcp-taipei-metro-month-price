@@ -13,13 +13,13 @@ info:
     The MCP endpoint follows the MCP Streamable HTTP specification and is primarily used by AI clients.
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:3000
     description: Local development server
   - url: http://localhost:{port}
     description: Configurable port via MCP_PORT environment variable
     variables:
       port:
-        default: '8080'
+        default: '3000'
 
 paths:
   /healthz:

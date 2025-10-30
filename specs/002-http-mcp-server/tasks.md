@@ -23,7 +23,7 @@
 
 **Purpose**: Add server configuration and environment variable handling
 
-- [X] T003 [P1] [US1] Create src/config/env.ts with environment variable configuration (MCP_PORT with default 8080, LOG_LEVEL, CACHE_PATH) following existing src/config/app.ts pattern
+- [X] T003 [P1] [US1] Create src/config/env.ts with environment variable configuration (MCP_PORT with default 3000, LOG_LEVEL, CACHE_PATH) following existing src/config/app.ts pattern
 - [X] T004 [P1] [US1] Add package.json script `"server": "bun run src/index.ts"` in scripts section
 - [X] T005 [P1] [US1] Create src/types/server.ts with ServerConfig interface (port: number, logLevel: string, cachePath: string) and HealthCheckResponse type definition from data-model.md
 
@@ -40,7 +40,7 @@
 - [X] T008 [P1] [US1] Create src/server/http-server.ts with Bun.serve() HTTP server handling /mcp endpoint (delegating to transport.handleRequest) and routing to health handler
 - [X] T009 [P1] [US1] Create src/server/health.ts implementing GET /healthz endpoint returning HealthCheckResponse with server status, MCP connection state, and uptime tracking
 - [X] T010 [P1] [US1] Update src/index.ts to start HTTP server when MCP_PORT is set, otherwise default to stdio mode for backward compatibility
-- [X] T011 [P1] [US1] Manual test: Start server with `MCP_PORT=8080 bun run server` and verify health check responds at http://localhost:8080/healthz with status "healthy" and mcp.connected true
+- [X] T011 [P1] [US1] Manual test: Start server with `MCP_PORT=3000 bun run server` and verify health check responds at http://localhost:3000/healthz with status "healthy" and mcp.connected true
 - [X] T011b [P1] [US1] Manual test: Verify graceful shutdown by starting server, sending health check request, then sending SIGTERM signal - confirm response completes before shutdown and no errors logged
 
 **Story Completion Criteria**:
@@ -59,7 +59,7 @@
 
 - [X] T012 [P2] [US2] Verify existing MCP tool handlers in src/adapters/mcp/tools.ts work with HTTP transport (no modifications needed, SDK handles routing)
 - [X] T013 [P2] [US2] Verify existing calculate_tpass_value tool schema and handler function in src/adapters/mcp/tools.ts are registered with MCP server
-- [X] T014 [P2] [US2] Manual test: POST to http://localhost:8080/mcp with JSON-RPC request calling calculate_tpass_value tool with test parameters (rides: 42, month: 11, year: 2025)
+- [X] T014 [P2] [US2] Manual test: POST to http://localhost:3000/mcp with JSON-RPC request calling calculate_tpass_value tool with test parameters (rides: 42, month: 11, year: 2025)
 - [X] T015 [P2] [US2] Verify calculator returns TPASSRecommendation with cost breakdown, savings analysis, and purchase decision matching acceptance criteria
 
 **Story Completion Criteria**:
@@ -77,7 +77,7 @@
 **Purpose**: Enable SSE streaming for real-time calculation updates
 
 - [X] T016 [P3] [US3] Verify StreamableHTTPServerTransport automatically handles GET /mcp for SSE stream establishment (no custom code needed, SDK provides this)
-- [X] T017 [P3] [US3] Manual test: Open SSE connection to http://localhost:8080/mcp with Accept: text/event-stream header and verify MCP messages stream as server-sent events
+- [X] T017 [P3] [US3] Manual test: Open SSE connection to http://localhost:3000/mcp with Accept: text/event-stream header and verify MCP messages stream as server-sent events
 
 **Story Completion Criteria**:
 - ✅ SSE stream establishes successfully (FR-003)
@@ -114,8 +114,8 @@
 
 **Purpose**: Update existing container configuration for HTTP server deployment
 
-- [X] T023 [P5] [US5] Rename Dockerfile to Containerfile and update: Change CMD to ["bun", "run", "server"], add ENV MCP_PORT=8080, add EXPOSE 8080, add HEALTHCHECK using curl to /healthz endpoint - keep existing node:lts-slim + Bun binary copy architecture
-- [X] T024 [P5] [US5] Manual test: Build container `docker build -f Containerfile -t mcp-taipei-metro-server .` and run `docker run -p 8080:8080 mcp-taipei-metro-server`, verify server accessible and health check passes, rebuild time < 30 seconds for code changes
+- [X] T023 [P5] [US5] Rename Dockerfile to Containerfile and update: Change CMD to ["bun", "run", "server"], add ENV MCP_PORT=3000, add EXPOSE 3000, add HEALTHCHECK using curl to /healthz endpoint - keep existing node:lts-slim + Bun binary copy architecture
+- [X] T024 [P5] [US5] Manual test: Build container `docker build -f Containerfile -t mcp-taipei-metro-server .` and run `docker run -p 3000:3000 mcp-taipei-metro-server`, verify server accessible and health check passes, rebuild time < 30 seconds for code changes
 
 **Story Completion Criteria**:
 - ✅ Container builds successfully with layer caching (SC-009)
@@ -196,15 +196,15 @@ Based on research findings (90% complexity reduction from SDK usage):
 **US1 - Server Health**:
 ```bash
 # T011 validation
-MCP_PORT=8080 bun run server
-curl http://localhost:8080/healthz
+MCP_PORT=3000 bun run server
+curl http://localhost:3000/healthz
 # Expected: {"status":"healthy","server":{...},"mcp":{"connected":true,...}}
 ```
 
 **US2 - Calculator Tool**:
 ```bash
 # T014 validation
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"calculate_tpass_value","arguments":{"rides":42,"month":11,"year":2025}}}'
 # Expected: JSON-RPC response with TPASSRecommendation
@@ -213,7 +213,7 @@ curl -X POST http://localhost:8080/mcp \
 **US3 - Streaming**:
 ```bash
 # T017 validation
-curl -N -H "Accept: text/event-stream" http://localhost:8080/mcp
+curl -N -H "Accept: text/event-stream" http://localhost:3000/mcp
 # Expected: SSE stream with event: message lines
 ```
 
@@ -228,8 +228,8 @@ bun run update-deps
 ```bash
 # T024 validation
 docker build -f Containerfile -t mcp-taipei-metro-server .
-docker run -p 8080:8080 mcp-taipei-metro-server
-curl http://localhost:8080/healthz
+docker run -p 3000:3000 mcp-taipei-metro-server
+curl http://localhost:3000/healthz
 # Expected: Same health response as non-containerized
 ```
 

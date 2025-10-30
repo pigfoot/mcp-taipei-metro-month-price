@@ -46,7 +46,7 @@ The `/mcp` endpoint implements the MCP (Model Context Protocol) Streamable HTTP 
 ### Health Check
 
 ```bash
-curl http://localhost:8080/healthz
+curl http://localhost:3000/healthz
 ```
 
 Expected response:
@@ -69,7 +69,7 @@ Expected response:
 ### MCP Tool Call
 
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -90,7 +90,7 @@ curl -X POST http://localhost:8080/mcp \
 
 ```bash
 # Using curl to monitor SSE stream
-curl -N http://localhost:8080/mcp \
+curl -N http://localhost:3000/mcp \
   -H "Accept: text/event-stream"
 ```
 

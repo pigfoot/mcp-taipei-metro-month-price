@@ -16,7 +16,7 @@ export interface ServerConfig {
  */
 export function loadServerConfig(): ServerConfig {
   // Parse MCP_PORT with validation
-  const portEnv = process.env.MCP_PORT ?? '8080';
+  const portEnv = process.env.MCP_PORT ?? '3000';
   const port = parseInt(portEnv, 10);
 
   if (isNaN(port) || port < 1 || port > 65535) {
@@ -49,7 +49,7 @@ export function loadServerConfig(): ServerConfig {
  * Default server configuration for testing
  */
 export const DEFAULT_SERVER_CONFIG: ServerConfig = {
-  port: 8080,
+  port: 3000,
   logLevel: 'info',
   cachePath: 'data/calendar-cache.json',
 } as const;

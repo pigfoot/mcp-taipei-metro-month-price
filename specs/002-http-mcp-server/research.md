@@ -172,9 +172,9 @@ FROM docker.io/node:lts-slim AS runtime
 **Required Updates for HTTP Server** (4 line changes + file rename):
 - Rename file from `Dockerfile` to `Containerfile` (OCI compliance per spec)
 - Change CMD from `["bun", "run", "calculate"]` to `["bun", "run", "server"]`
-- Add `ENV MCP_PORT=8080`
-- Add `EXPOSE 8080`
-- Add health check: `HEALTHCHECK CMD curl -f http://localhost:8080/healthz || exit 1`
+- Add `ENV MCP_PORT=3000`
+- Add `EXPOSE 3000`
+- Add health check: `HEALTHCHECK CMD curl -f http://localhost:3000/healthz || exit 1`
 
 **Why NOT to change to oven/bun:slim**:
 - Current architecture is already optimized
@@ -234,18 +234,18 @@ class ConnectionQueue {
 **Rationale**:
 - Bun.env provides typed environment variable access
 - Validation at startup prevents runtime issues
-- Default values per spec (MCP_PORT=8080)
+- Default values per spec (MCP_PORT=3000)
 
 **Configuration Schema**:
 ```typescript
 interface ServerConfig {
-  port: number;           // MCP_PORT (default: 8080)
+  port: number;           // MCP_PORT (default: 3000)
   logLevel: string;       // LOG_LEVEL (default: 'info')
   cachePath: string;      // CACHE_PATH (default: 'data/calendar-cache.json')
 }
 
 function loadConfig(): ServerConfig {
-  const port = parseInt(Bun.env.MCP_PORT ?? '8080', 10);
+  const port = parseInt(Bun.env.MCP_PORT ?? '3000', 10);
   if (isNaN(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid MCP_PORT: ${Bun.env.MCP_PORT}`);
   }
