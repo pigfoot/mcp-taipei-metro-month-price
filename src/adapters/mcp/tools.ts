@@ -16,7 +16,7 @@ export const tools: Tool[] = [
     description:
       'Calculate whether buying a TPASS monthly pass (NT$1280) is more cost-effective than paying regular fares with Taipei Metro frequent rider discount. ' +
       'Use this tool when users want to: (1) decide if TPASS is worth it for their commute pattern, (2) calculate monthly transportation costs, or (3) compare savings between TPASS and regular fare. ' +
-      'Returns detailed cost breakdown, savings analysis, discount tier applied, and a recommendation (BUY or SKIP TPASS).',
+      'Returns detailed cost breakdown, savings analysis, discount tier applied, a recommendation (BUY or SKIP TPASS), and IMPORTANTLY: a list of public holidays (including non-weekend holidays like 中秋節, 國慶日) that reduce working days in the period.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -106,6 +106,12 @@ export async function handleCalculateFare(args: {
         periodStart: formatDate(result.period.startDate),
         periodEnd: formatDate(result.period.endDate),
       },
+      holidays: result.holidayDetails
+        ? {
+            totalHolidays: result.holidayDetails.totalHolidays,
+            list: result.holidayDetails.holidayList,
+          }
+        : undefined,
       warnings: result.warnings,
     };
 
