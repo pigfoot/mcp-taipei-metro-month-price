@@ -60,6 +60,37 @@ export function isInPast(date: Date): boolean {
 }
 
 /**
+ * Get the next working day from a given date
+ * @param from - Starting date (defaults to today)
+ * @param isWorkingDayFn - Function to check if a date is a working day
+ * @returns The next working day (could be today if today is a working day and no time has passed yet)
+ */
+export function getNextWorkingDay(
+  from: Date = new Date(),
+  isWorkingDayFn?: (date: Date) => boolean
+): Date {
+  // Default working day check: Monday to Friday
+  const defaultIsWorkingDay = (date: Date): boolean => !isWeekend(date);
+  const checkWorkingDay = isWorkingDayFn ?? defaultIsWorkingDay;
+
+  const tomorrow = addDays(from, 1);
+  let candidate = new Date(tomorrow);
+  candidate.setHours(0, 0, 0, 0);
+
+  // Look ahead up to 14 days to find next working day
+  // (handles long holiday periods like Chinese New Year)
+  for (let i = 0; i < 14; i++) {
+    if (checkWorkingDay(candidate)) {
+      return candidate;
+    }
+    candidate = addDays(candidate, 1);
+  }
+
+  // Fallback: if no working day found in 14 days, just return tomorrow
+  return tomorrow;
+}
+
+/**
  * Get the start and end of a calendar month
  */
 export function getMonthBoundaries(year: number, month: number): { start: Date; end: Date } {

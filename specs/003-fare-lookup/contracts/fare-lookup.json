@@ -1,0 +1,297 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Taipei Metro Fare Lookup MCP Tool",
+    "version": "1.0.0",
+    "description": "MCP tool for looking up Taipei Metro fares between stations"
+  },
+  "components": {
+    "schemas": {
+      "FareLookupToolInput": {
+        "type": "object",
+        "properties": {
+          "fare": {
+            "type": "number",
+            "description": "Direct fare input in TWD",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "origin": {
+            "type": "string",
+            "description": "Origin station name in Chinese",
+            "maxLength": 50
+          },
+          "destination": {
+            "type": "string",
+            "description": "Destination station name in Chinese",
+            "maxLength": 50
+          },
+          "fareType": {
+            "type": "string",
+            "enum": ["regular", "discounted"],
+            "default": "regular",
+            "description": "Type of fare to retrieve"
+          }
+        },
+        "oneOf": [
+          {
+            "required": ["fare"],
+            "not": {
+              "required": ["origin", "destination"]
+            }
+          },
+          {
+            "required": ["origin", "destination"],
+            "not": {
+              "required": ["fare"]
+            }
+          }
+        ]
+      },
+      "FareLookupToolOutput": {
+        "type": "object",
+        "required": ["success"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the lookup was successful"
+          },
+          "fare": {
+            "type": "number",
+            "description": "The fare amount in TWD"
+          },
+          "fareType": {
+            "type": "string",
+            "enum": ["regular", "discounted"],
+            "description": "Type of fare returned"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["manual", "cache", "network"],
+            "description": "Source of fare data"
+          },
+          "stations": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "type": "string",
+                "description": "Confirmed origin station name"
+              },
+              "destination": {
+                "type": "string",
+                "description": "Confirmed destination station name"
+              }
+            }
+          },
+          "suggestions": {
+            "type": "object",
+            "description": "Station name suggestions if fuzzy matching was needed",
+            "properties": {
+              "origin": {
+                "$ref": "#/components/schemas/StationSuggestions"
+              },
+              "destination": {
+                "$ref": "#/components/schemas/StationSuggestions"
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Any warnings about the data"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "StationSuggestions": {
+        "type": "object",
+        "properties": {
+          "original": {
+            "type": "string",
+            "description": "Original user input"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "station": {
+                  "type": "string",
+                  "description": "Suggested station name"
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Match confidence score"
+                }
+              },
+              "required": ["station", "score"]
+            },
+            "maxItems": 3,
+            "description": "Top 3 matching station suggestions"
+          }
+        },
+        "required": ["original", "matches"]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[EW][0-9]{3}$",
+            "description": "Error code (E=Error, W=Warning)"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
+          }
+        },
+        "required": ["code", "message"]
+      }
+    }
+  },
+  "paths": {
+    "/tools/lookup-fare": {
+      "post": {
+        "summary": "Lookup Taipei Metro fare",
+        "description": "Get fare between two stations or validate manual fare input",
+        "operationId": "lookupFare",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FareLookupToolInput"
+              },
+              "examples": {
+                "manualFare": {
+                  "summary": "Manual fare input",
+                  "value": {
+                    "fare": 30,
+                    "fareType": "regular"
+                  }
+                },
+                "stationLookup": {
+                  "summary": "Station-based lookup",
+                  "value": {
+                    "origin": "台北車站",
+                    "destination": "市政府",
+                    "fareType": "regular"
+                  }
+                },
+                "fuzzyMatch": {
+                  "summary": "Station lookup with fuzzy matching",
+                  "value": {
+                    "origin": "台北",
+                    "destination": "市府",
+                    "fareType": "discounted"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful fare lookup",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FareLookupToolOutput"
+                },
+                "examples": {
+                  "directFareSuccess": {
+                    "summary": "Manual fare accepted",
+                    "value": {
+                      "success": true,
+                      "fare": 30,
+                      "fareType": "regular",
+                      "source": "manual"
+                    }
+                  },
+                  "cachedLookupSuccess": {
+                    "summary": "Station lookup from cache",
+                    "value": {
+                      "success": true,
+                      "fare": 25,
+                      "fareType": "regular",
+                      "source": "cache",
+                      "stations": {
+                        "origin": "台北車站",
+                        "destination": "市政府"
+                      }
+                    }
+                  },
+                  "fuzzyMatchSuccess": {
+                    "summary": "Station lookup with suggestions",
+                    "value": {
+                      "success": true,
+                      "fare": 25,
+                      "fareType": "regular",
+                      "source": "cache",
+                      "stations": {
+                        "origin": "台北車站",
+                        "destination": "市政府"
+                      },
+                      "suggestions": {
+                        "origin": {
+                          "original": "台北",
+                          "matches": [
+                            {"station": "台北車站", "score": 0.9},
+                            {"station": "台北101/世貿", "score": 0.6},
+                            {"station": "台北小巨蛋", "score": 0.5}
+                          ]
+                        },
+                        "destination": {
+                          "original": "市府",
+                          "matches": [
+                            {"station": "市政府", "score": 0.95}
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "expiredCacheWarning": {
+                    "summary": "Success with expired cache warning",
+                    "value": {
+                      "success": true,
+                      "fare": 25,
+                      "fareType": "regular",
+                      "source": "cache",
+                      "stations": {
+                        "origin": "台北車站",
+                        "destination": "市政府"
+                      },
+                      "warnings": ["Using expired cache data (last updated 8 days ago)"]
+                    }
+                  },
+                  "stationsNotFound": {
+                    "summary": "Stations not found",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "E006",
+                        "message": "Stations not found in fare table"
+                      },
+                      "suggestions": {
+                        "origin": {
+                          "original": "桃園",
+                          "matches": []
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

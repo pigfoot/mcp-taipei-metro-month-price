@@ -96,6 +96,8 @@ $RECYCLE.BIN/
 # Project specific
 data/calendar-cache.json
 data/calendar-cache.json.backup.*
+data/fare-cache.json
+data/fare-cache.json.backup.*
 .claude/
 
 # Speckit memory (user-specific workflow state)

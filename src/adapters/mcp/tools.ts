@@ -4,8 +4,11 @@
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { calculateTPASSComparison, getDiscountInfo } from '../../services/calculator.js';
-import { parseDate, formatDate, formatCurrency, formatPercentage } from '../../lib/utils.js';
+import { parseDate, formatDate, getNextWorkingDay } from '../../lib/utils.js';
 import { getDiscountTierDescription } from '../../models/discount.js';
+import { FareService } from '../../services/fareService.js';
+import { CalendarService } from '../../services/calendar-service.js';
+import type { FareLookupRequest } from '../../models/fare.js';
 
 /**
  * Define MCP tools
@@ -24,7 +27,8 @@ export const tools: Tool[] = [
           type: 'string',
           description:
             'Start date for TPASS validity period in YYYY-MM-DD format (e.g., "2025-11-01"). ' +
-            'Defaults to today. TPASS is valid for 30 days from start date. ' +
+            'Defaults to the next working day (skips weekends and public holidays). ' +
+            'TPASS is valid for 30 days from start date. ' +
             'Use this to calculate for future months or specific periods.',
         },
         oneWayFare: {
@@ -63,6 +67,47 @@ export const tools: Tool[] = [
       properties: {},
     },
   },
+  {
+    name: 'lookup_fare',
+    description:
+      'Lookup Taipei Metro fare between two stations or validate manual fare input for TPASS calculations. ' +
+      'Use this tool when users: (1) provide station names and want to find the fare automatically, (2) want to manually specify a fare amount, or (3) need fare information before calculating TPASS savings. ' +
+      'Supports both regular (full price) and discounted fare types. ' +
+      'If station names are not exact matches, returns suggestions for disambiguation. ' +
+      'The returned fare can be used directly with calculate_fare tool.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fare: {
+          type: 'number',
+          description:
+            'Manual fare amount in NTD. Use this if you already know the fare. ' +
+            'Cannot be used together with origin/destination. Must be a positive number.',
+        },
+        origin: {
+          type: 'string',
+          description:
+            'Origin station name in Chinese (e.g., "台北車站", "淡水"). ' +
+            'Required if using station-based lookup. Must be used together with destination. ' +
+            'Supports fuzzy matching - system will suggest corrections if exact match not found.',
+        },
+        destination: {
+          type: 'string',
+          description:
+            'Destination station name in Chinese (e.g., "市政府", "象山"). ' +
+            'Required if using station-based lookup. Must be used together with origin. ' +
+            'Supports fuzzy matching - system will suggest corrections if exact match not found.',
+        },
+        fareType: {
+          type: 'string',
+          description:
+            'Fare type: "regular" (full price) or "discounted" (優惠票). ' +
+            'Defaults to "regular". Discounted fares are typically 50% off for eligible passengers.',
+          enum: ['regular', 'discounted'],
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -76,7 +121,19 @@ export async function handleCalculateFare(args: {
 }): Promise<string> {
   try {
     // Parse and validate inputs
-    const startDate = args.startDate ? parseDate(args.startDate) : new Date();
+    let startDate: Date;
+    if (args.startDate) {
+      startDate = parseDate(args.startDate);
+    } else {
+      // Default to next working day
+      const calendarService = CalendarService.getInstance();
+      await calendarService.initialize();
+      startDate = getNextWorkingDay(
+        new Date(),
+        (date) => calendarService.isWorkingDay(date)
+      );
+    }
+
     const oneWayFare = args.oneWayFare;
     const tripsPerDay = args.tripsPerDay;
     const customWorkingDays = args.customWorkingDays;
@@ -151,6 +208,120 @@ export async function handleGetDiscountInfo(): Promise<string> {
 }
 
 /**
+ * Handle lookup_fare tool call
+ */
+export async function handleLookupFare(args: {
+  fare?: number;
+  origin?: string;
+  destination?: string;
+  fareType?: 'regular' | 'discounted';
+}): Promise<string> {
+  try {
+    // Create fare service instance
+    const fareService = new FareService();
+    await fareService.initialize();
+
+    // Build request
+    const request: FareLookupRequest = {
+      fare: args.fare,
+      origin: args.origin,
+      destination: args.destination,
+      fareType: args.fareType ?? 'regular',
+    };
+
+    // Lookup fare
+    const result = await fareService.lookupFare(request);
+
+    // Format response based on result
+    if (result.success) {
+      const response: Record<string, unknown> = {
+        success: true,
+        fare: result.fare,
+        source: result.source,
+        fareType: args.fareType ?? 'regular',
+      };
+
+      // Add station details if available
+      if (result.stations) {
+        response.stations = {
+          origin: result.stations.origin.matched,
+          destination: result.stations.destination.matched,
+          distance: result.stations.distance,
+        };
+      }
+
+      // Add warnings if present
+      if (result.warnings && result.warnings.length > 0) {
+        response.warnings = result.warnings;
+      }
+
+      // Add usage hint for calculate_fare
+      response.nextStep = `Use this fare (${result.fare} NTD) with the calculate_fare tool to determine if TPASS is cost-effective for your commute.`;
+
+      return JSON.stringify(response, null, 2);
+    } else {
+      // Handle error or suggestions
+      const errorResponse: Record<string, unknown> = {
+        success: false,
+        error: {
+          code: result.error!.code,
+          message: result.error!.message,
+        },
+      };
+
+      // Add suggestions if available
+      if (result.suggestions) {
+        errorResponse.suggestions = {};
+
+        if (result.suggestions.origin && result.suggestions.origin.length > 0) {
+          errorResponse.suggestions = {
+            ...(errorResponse.suggestions as object),
+            origin: result.suggestions.origin.map((match) => ({
+              station: match.name,
+              confidence: `${(match.score * 100).toFixed(0)}%`,
+            })),
+          };
+        }
+
+        if (result.suggestions.destination && result.suggestions.destination.length > 0) {
+          errorResponse.suggestions = {
+            ...(errorResponse.suggestions as object),
+            destination: result.suggestions.destination.map((match) => ({
+              station: match.name,
+              confidence: `${(match.score * 100).toFixed(0)}%`,
+            })),
+          };
+        }
+
+        errorResponse.hint =
+          'Please select one of the suggested station names and try again with the exact name.';
+      }
+
+      // Add error details hint if available
+      if (result.error!.details?.hint) {
+        errorResponse.hint = result.error!.details.hint;
+      }
+
+      return JSON.stringify(errorResponse, null, 2);
+    }
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
+    return JSON.stringify(
+      {
+        success: false,
+        error: {
+          code: 'E001',
+          message: errorMessage,
+        },
+      },
+      null,
+      2
+    );
+  }
+}
+
+/**
  * Route tool calls to appropriate handlers
  */
 export async function handleToolCall(
@@ -162,6 +333,8 @@ export async function handleToolCall(
       return handleCalculateFare(args as Parameters<typeof handleCalculateFare>[0]);
     case 'get_discount_info':
       return handleGetDiscountInfo();
+    case 'lookup_fare':
+      return handleLookupFare(args as Parameters<typeof handleLookupFare>[0]);
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }

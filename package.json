@@ -15,6 +15,9 @@
     "calendar:update": "bun run src/cli/calendar-cmd.ts update",
     "calendar:status": "bun run src/cli/calendar-cmd.ts status",
     "calendar:view": "bun run src/cli/calendar-cmd.ts view",
+    "fare:update": "bun run src/cli/fare-cmd.ts update",
+    "fare:status": "bun run src/cli/fare-cmd.ts status",
+    "fare:lookup": "bun run src/cli/fare-cmd.ts lookup",
     "update-deps": "bun run src/commands/update-deps.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
@@ -39,7 +42,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.2"
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "fuzzysort": "^3.1.0"
   },
   "engines": {
     "bun": ">=1.0.0"

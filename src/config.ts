@@ -35,6 +35,15 @@ export const DEFAULT_CONFIG = {
     minWorkingDays: 0,
     maxWorkingDays: 30,
   },
+
+  // Fare lookup configuration
+  fare: {
+    csvUrl: 'https://data.taipei/api/frontstage/tpeod/dataset/resource.download?rid=893c2f2a-dcfd-407b-b871-394a14105532',
+    cacheFile: 'data/fare-cache.json',
+    cacheTTLDays: 7, // 7 days cache expiry
+    fuzzyMatchThreshold: 0.3,
+    maxSuggestions: 3,
+  },
 } as const;
 
 /**
