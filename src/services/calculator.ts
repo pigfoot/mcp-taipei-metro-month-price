@@ -3,12 +3,14 @@
  */
 
 import type { FareComparison, CalculationParams, HolidayDetails, HolidayDetail } from '../lib/types.js';
+import type { CrossMonthCalculation } from '../models/tpass-calculation.js';
 import { DEFAULT_CONFIG } from '../config.js';
 import { createTPASS } from '../models/tpass.js';
 import { calculateWorkingDayPeriod } from '../models/calendar.js';
 import { getDiscountTier, getAllDiscountTiers } from '../models/discount.js';
 import { isInPast, formatCurrency, splitDateRangeByMonth, getChineseDayOfWeek, formatDate, isWeekend } from '../lib/utils.js';
 import { CalendarService } from './calendar-service.js';
+import { calculateCrossMonthTPASS } from './tpass-calculator.js';
 
 /**
  * Calculate TPASS vs regular fare comparison
@@ -41,6 +43,7 @@ export async function calculateTPASSComparison(
   const totalTrips = workingDays * tripsPerDay;
 
   // Calculate regular cost with cross-month discount support
+  // Note: This correctly applies discount tiers per month, not on total trips
   const regularCost = await calculateRegularFareWithCrossMonthDiscount(
     tpass.startDate,
     tpass.endDate,
@@ -49,7 +52,8 @@ export async function calculateTPASSComparison(
     params.customWorkingDays
   );
 
-  // Get discount tier based on total trips (for display purposes)
+  // Get discount tier for display - this is approximate for cross-month scenarios
+  // For accurate discount breakdown, use calculateCrossMonthTPASSWithBreakdown()
   const appliedDiscount = getDiscountTier(totalTrips);
 
   // Calculate costs
@@ -136,6 +140,9 @@ async function extractHolidayDetails(startDate: Date, endDate: Date): Promise<Ho
 /**
  * Calculate regular fare cost with cross-month discount support
  * Splits the period by calendar month and applies discount separately for each month
+ *
+ * IMPORTANT: Always uses cross-month calculation logic, even with customWorkingDays.
+ * This ensures discount tiers are applied correctly per month, not on total trips.
  */
 async function calculateRegularFareWithCrossMonthDiscount(
   startDate: Date,
@@ -144,23 +151,18 @@ async function calculateRegularFareWithCrossMonthDiscount(
   tripsPerDay: number,
   customWorkingDays?: number
 ): Promise<number> {
-  // If custom working days provided, use simple calculation
-  if (customWorkingDays !== undefined) {
-    const trips = customWorkingDays * tripsPerDay;
-    const discount = getDiscountTier(trips);
-    return oneWayFare * trips * (1 - discount.discountRate);
-  }
-
   // Check if period spans multiple calendar months
   const startMonth = startDate.getMonth();
   const startYear = startDate.getFullYear();
   const endMonth = endDate.getMonth();
   const endYear = endDate.getFullYear();
+  const crossesMonthBoundary = startYear !== endYear || startMonth !== endMonth;
 
-  // If same month, calculate directly
-  if (startYear === endYear && startMonth === endMonth) {
-    const period = await calculateWorkingDayPeriod(startDate, endDate);
-    const trips = period.workingDays * tripsPerDay;
+  // Single month calculation (with or without custom working days)
+  if (!crossesMonthBoundary) {
+    const trips = customWorkingDays !== undefined
+      ? customWorkingDays * tripsPerDay
+      : (await calculateWorkingDayPeriod(startDate, endDate)).workingDays * tripsPerDay;
     const discount = getDiscountTier(trips);
     return oneWayFare * trips * (1 - discount.discountRate);
   }
@@ -169,12 +171,27 @@ async function calculateRegularFareWithCrossMonthDiscount(
   const segments = splitDateRangeByMonth(startDate, endDate);
   let totalCost = 0;
 
-  for (const segment of segments) {
-    const period = await calculateWorkingDayPeriod(segment.start, segment.end);
-    const trips = period.workingDays * tripsPerDay;
-    const discount = getDiscountTier(trips);
-    const segmentCost = oneWayFare * trips * (1 - discount.discountRate);
-    totalCost += segmentCost;
+  // If customWorkingDays provided, distribute proportionally across months
+  if (customWorkingDays !== undefined) {
+    const totalDaysInPeriod = segments.reduce((sum, seg) => sum + seg.days, 0);
+
+    for (const segment of segments) {
+      // Proportional allocation of working days based on days in segment
+      const segmentWorkingDays = Math.round((segment.days / totalDaysInPeriod) * customWorkingDays);
+      const trips = segmentWorkingDays * tripsPerDay;
+      const discount = getDiscountTier(trips);
+      const segmentCost = oneWayFare * trips * (1 - discount.discountRate);
+      totalCost += segmentCost;
+    }
+  } else {
+    // Use actual working day calculation per segment
+    for (const segment of segments) {
+      const period = await calculateWorkingDayPeriod(segment.start, segment.end);
+      const trips = period.workingDays * tripsPerDay;
+      const discount = getDiscountTier(trips);
+      const segmentCost = oneWayFare * trips * (1 - discount.discountRate);
+      totalCost += segmentCost;
+    }
   }
 
   return totalCost;
@@ -203,4 +220,39 @@ export function getDiscountInfo() {
     },
     comparisonTip: 'TPASS is typically beneficial for commuters making 30+ trips per month',
   };
+}
+
+/**
+ * Calculate cross-month TPASS fare with detailed monthly breakdown
+ * Feature: 004-cross-month-tpass
+ *
+ * Enhanced calculation that properly handles cross-month scenarios by applying
+ * discount tiers independently to each calendar month.
+ *
+ * @param params - Calculation parameters
+ * @returns Complete cross-month calculation with monthly breakdown
+ */
+export async function calculateCrossMonthTPASSWithBreakdown(
+  params: CalculationParams = {}
+): Promise<CrossMonthCalculation> {
+  // Extract parameters with defaults
+  const startDate = params.startDate || new Date();
+  const oneWayFare = params.oneWayFare || DEFAULT_CONFIG.oneWayFare;
+  const tripsPerDay = params.tripsPerDay || DEFAULT_CONFIG.tripsPerDay;
+
+  // Create TPASS instance to get the 30-day period
+  const tpass = createTPASS(startDate);
+
+  // Ensure calendar data exists for the period
+  const calendarService = CalendarService.getInstance();
+  await calendarService.ensureDataForPeriod(tpass.startDate, tpass.endDate);
+
+  // Calculate using the new cross-month calculator
+  return calculateCrossMonthTPASS(
+    tpass.startDate,
+    tpass.endDate,
+    oneWayFare,
+    tripsPerDay,
+    params.customWorkingDays
+  );
 }

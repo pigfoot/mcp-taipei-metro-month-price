@@ -103,3 +103,11 @@ data/fare-cache.json.backup.*
 # Speckit memory (user-specific workflow state)
 .specify/memory/*
 !.specify/memory/constitution.md
+
+# Temporary test/debug files (never commit these)
+test-*.ts
+debug-*.ts
+temp-*.ts
+scratch-*.ts
+*-test.ts
+*-debug.ts

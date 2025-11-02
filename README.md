@@ -16,6 +16,9 @@ This tool helps Taipei Metro commuters decide whether to purchase a TPASS monthl
   - Support for regular and discounted fares
   - 7-day intelligent caching
 - **Cross-Month Support**: Handles TPASS periods spanning multiple calendar months
+  - Automatically splits calculations by calendar month boundaries
+  - Applies discount tiers independently per month
+  - Shows detailed monthly breakdown with trip counts and costs
 - **Flexible Parameters**: Customize fare, trips per day, and working days
 - **Calendar Integration**: Uses Taiwan government holiday calendar for accurate working day calculations
 - **Multiple Interfaces**: MCP server, CLI commands, and programmatic API
@@ -229,10 +232,42 @@ Output:
 ### Example 3: Cross-Month Period
 
 ```bash
-$ bun run calculate --date 2025-01-15
+$ bun run calculate --date 2024-10-31 --fare 35 --custom-days 20
 ```
 
-Output correctly splits the 30-day period between January and February, applying discounts separately for each month.
+Output correctly splits the 30-day period between October and November, applying discounts separately for each month:
+
+```
+📊 MONTHLY BREAKDOWN (Cross-Month Calculation)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Month 1: October 2024
+  Date Range: Oct 31 - Oct 31
+  Working Days: 1
+  Trips: 2
+  Base Fare: NT$35
+  Original Cost: NT$70
+  Discount Tier: 0%
+  Discount Amount: NT$0
+  Final Cost: NT$70
+
+Month 2: November 2024
+  Date Range: Nov 1 - Nov 29
+  Working Days: 19
+  Trips: 38
+  Base Fare: NT$35
+  Original Cost: NT$1330
+  Discount Tier: 10%
+  Discount Amount: NT$133
+  Final Cost: NT$1197
+
+TOTALS:
+  Original Cost: NT$1400
+  Discount Amount: NT$133
+  Final Cost: NT$1267
+```
+
+The system automatically detects cross-month periods and shows detailed breakdown per month, applying the correct discount tier based on each month's trip count (not the total).
 
 ### Example 4: Fare Lookup with Station Names
 

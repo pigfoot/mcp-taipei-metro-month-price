@@ -3,9 +3,10 @@
  * CLI command for TPASS fare calculation
  */
 
-import { calculateTPASSComparison } from '../services/calculator.js';
+import { calculateTPASSComparison, calculateCrossMonthTPASSWithBreakdown } from '../services/calculator.js';
 import { parseDate, formatDate, formatCurrency, formatPercentage } from '../lib/utils.js';
 import { getDiscountTierDescription } from '../models/discount.js';
+import { formatMonthlyBreakdown } from '../services/tpass-calculator.js';
 import { DEFAULT_CONFIG } from '../config.js';
 
 /**
@@ -144,7 +145,7 @@ function displayResults(result: Awaited<ReturnType<typeof calculateTPASSComparis
   console.log(`   TPASS monthly pass:         ${formatCurrency(result.tpassCost)}`);
   console.log(`   Regular fare (no discount): ${formatCurrency(result.regularCostBeforeDiscount)}`);
   console.log(
-    `   Regular fare (with ${formatPercentage(result.appliedDiscount.discountRate)} discount): ${formatCurrency(result.regularCost)}`
+    `   Regular fare (with discount): ${formatCurrency(result.regularCost)}`
   );
   console.log(`   Discount tier: ${getDiscountTierDescription(result.appliedDiscount)}\n`);
 
@@ -194,6 +195,33 @@ async function main() {
     console.log('Calculating TPASS comparison...');
     const result = await calculateTPASSComparison(params);
     displayResults(result);
+
+    // Show detailed monthly breakdown for cross-month periods
+    const crossMonthResult = await calculateCrossMonthTPASSWithBreakdown(params);
+    if (crossMonthResult.crossesMonthBoundary) {
+      console.log('📊 MONTHLY BREAKDOWN (Cross-Month Calculation)');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+      const breakdown = formatMonthlyBreakdown(crossMonthResult);
+      breakdown.forEach((month, index) => {
+        console.log(`Month ${index + 1}: ${month.month} ${month.year}`);
+        console.log(`  Date Range: ${month.dateRange}`);
+        console.log(`  Working Days: ${month.workingDays}`);
+        console.log(`  Trips: ${month.trips}`);
+        console.log(`  Base Fare: ${month.baseFare}`);
+        console.log(`  Original Cost: ${month.originalCost}`);
+        console.log(`  Discount Tier: ${month.discountTier}`);
+        console.log(`  Discount Amount: ${month.discountAmount}`);
+        console.log(`  Final Cost: ${month.finalCost}\n`);
+      });
+
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('TOTALS:');
+      console.log(`  Original Cost: NT$${crossMonthResult.totalOriginalCost.toFixed(0)}`);
+      console.log(`  Discount Amount: NT$${crossMonthResult.totalDiscountAmount.toFixed(0)}`);
+      console.log(`  Final Cost: NT$${crossMonthResult.totalFinalCost.toFixed(0)}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    }
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);

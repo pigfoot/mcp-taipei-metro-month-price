@@ -3,11 +3,12 @@
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { calculateTPASSComparison, getDiscountInfo } from '../../services/calculator.js';
+import { calculateTPASSComparison, getDiscountInfo, calculateCrossMonthTPASSWithBreakdown } from '../../services/calculator.js';
 import { parseDate, formatDate, getNextWorkingDay } from '../../lib/utils.js';
 import { getDiscountTierDescription } from '../../models/discount.js';
 import { FareService } from '../../services/fareService.js';
 import { CalendarService } from '../../services/calendar-service.js';
+import { formatMonthlyBreakdown } from '../../services/tpass-calculator.js';
 import type { FareLookupRequest } from '../../models/fare.js';
 
 /**
@@ -19,7 +20,8 @@ export const tools: Tool[] = [
     description:
       'Calculate whether buying a TPASS monthly pass (NT$1280) is more cost-effective than paying regular fares with Taipei Metro frequent rider discount. ' +
       'Use this tool when users want to: (1) decide if TPASS is worth it for their commute pattern, (2) calculate monthly transportation costs, or (3) compare savings between TPASS and regular fare. ' +
-      'Returns detailed cost breakdown, savings analysis, discount tier applied, a recommendation (BUY or SKIP TPASS), and IMPORTANTLY: a list of public holidays (including non-weekend holidays like 中秋節, 國慶日) that reduce working days in the period.',
+      'Returns detailed cost breakdown, savings analysis, discount tier applied, a recommendation (BUY or SKIP TPASS), public holidays list, and IMPORTANTLY: ' +
+      'when the 30-day period crosses calendar month boundaries, automatically includes monthlyBreakdown showing how discount tiers are applied SEPARATELY to each month (not on total trips).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -108,6 +110,40 @@ export const tools: Tool[] = [
       },
     },
   },
+  {
+    name: 'calculate_tpass_cross_month',
+    description:
+      'Calculate TPASS cost with detailed monthly breakdown when the 30-day period crosses calendar month boundaries. ' +
+      'Feature 004: Properly handles cross-month scenarios by applying discount tiers independently to each month. ' +
+      'Use this tool when: (1) users want to understand how costs are split across months, (2) calculating for month-end start dates (e.g., Oct 31), or (3) needing transparent cost breakdowns. ' +
+      'Returns: monthly segments with working days, trips, discount tiers, and costs per month, plus comparison with old calculation method.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        startDate: {
+          type: 'string',
+          description:
+            'Start date for TPASS validity period in YYYY-MM-DD format (e.g., "2024-10-31"). ' +
+            'Defaults to the next working day. TPASS is valid for 30 days from start date.',
+        },
+        oneWayFare: {
+          type: 'number',
+          description:
+            'One-way fare amount in NTD. Defaults to 40. Common values: 20-25 (short), 40-50 (typical), 60-65 (long).',
+        },
+        tripsPerDay: {
+          type: 'number',
+          description:
+            'Number of trips per working day. Defaults to 2 (one round trip).',
+        },
+        customWorkingDays: {
+          type: 'number',
+          description:
+            'Override auto-calculated working days with custom value (0-30). Optional.',
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -146,6 +182,14 @@ export async function handleCalculateFare(args: {
       customWorkingDays,
     });
 
+    // Check if period crosses month boundary
+    const crossMonthResult = await calculateCrossMonthTPASSWithBreakdown({
+      startDate,
+      oneWayFare,
+      tripsPerDay,
+      customWorkingDays,
+    });
+
     // Format response
     const response = {
       tpassCost: result.tpassCost,
@@ -158,11 +202,31 @@ export async function handleCalculateFare(args: {
       details: {
         workingDays: result.period.workingDays,
         totalTrips: result.totalTrips,
+        // For cross-month periods, clarify that discount is applied per month
         discountRate: result.appliedDiscount.discountRate,
         discountTier: getDiscountTierDescription(result.appliedDiscount),
+        discountNote: crossMonthResult.crossesMonthBoundary
+          ? 'IMPORTANT: Period crosses month boundary. Discount tiers are applied SEPARATELY per calendar month, not on total trips. See monthlyBreakdown for accurate calculation.'
+          : 'Single month period - discount tier applied to all trips.',
         periodStart: formatDate(result.period.startDate),
         periodEnd: formatDate(result.period.endDate),
+        crossesMonthBoundary: crossMonthResult.crossesMonthBoundary,
       },
+      // Add monthly breakdown for cross-month periods
+      monthlyBreakdown: crossMonthResult.crossesMonthBoundary
+        ? formatMonthlyBreakdown(crossMonthResult).map(month => ({
+            month: month.month,
+            year: month.year,
+            dateRange: month.dateRange,
+            workingDays: month.workingDays,
+            trips: month.trips,
+            baseFare: month.baseFare,
+            originalCost: month.originalCost,
+            discountTier: month.discountTier,
+            discountAmount: month.discountAmount,
+            finalCost: month.finalCost,
+          }))
+        : undefined,
       holidays: result.holidayDetails
         ? {
             totalHolidays: result.holidayDetails.totalHolidays,
@@ -322,6 +386,79 @@ export async function handleLookupFare(args: {
 }
 
 /**
+ * Handle calculate_tpass_cross_month tool call
+ * Feature: 004-cross-month-tpass
+ */
+export async function handleCalculateTPASSCrossMonth(args: {
+  startDate?: string;
+  oneWayFare?: number;
+  tripsPerDay?: number;
+  customWorkingDays?: number;
+}): Promise<string> {
+  try {
+    // Parse and validate inputs
+    let startDate: Date;
+    if (args.startDate) {
+      startDate = parseDate(args.startDate);
+    } else {
+      // Default to next working day
+      const calendarService = CalendarService.getInstance();
+      await calendarService.initialize();
+      startDate = getNextWorkingDay(
+        new Date(),
+        (date) => calendarService.isWorkingDay(date)
+      );
+    }
+
+    // Calculate with detailed breakdown
+    const calculation = await calculateCrossMonthTPASSWithBreakdown({
+      startDate,
+      oneWayFare: args.oneWayFare,
+      tripsPerDay: args.tripsPerDay,
+      customWorkingDays: args.customWorkingDays,
+    });
+
+    // Format monthly breakdown for display
+    const monthlyBreakdown = formatMonthlyBreakdown(calculation);
+
+    // Build response
+    const response = {
+      summary: {
+        periodStart: formatDate(calculation.startDate),
+        periodEnd: formatDate(calculation.endDate),
+        totalDays: calculation.totalDays,
+        totalWorkingDays: calculation.totalWorkingDays,
+        totalTrips: calculation.totalTrips,
+        crossesMonthBoundary: calculation.crossesMonthBoundary,
+      },
+      monthlyBreakdown,
+      costs: {
+        totalOriginalCost: `NT$${calculation.totalOriginalCost.toFixed(0)}`,
+        totalDiscountAmount: `NT$${calculation.totalDiscountAmount.toFixed(0)}`,
+        totalFinalCost: `NT$${calculation.totalFinalCost.toFixed(0)}`,
+      },
+      comparison: calculation.previousCalculation
+        ? {
+            oldMethod: calculation.previousCalculation.method,
+            oldMethodCost: `NT$${calculation.previousCalculation.totalCost.toFixed(0)}`,
+            difference: `NT$${calculation.previousCalculation.difference.toFixed(0)}`,
+            note:
+              calculation.previousCalculation.difference > 0
+                ? 'New method costs MORE (applies correct monthly discounts)'
+                : 'New method costs LESS (applies correct monthly discounts)',
+          }
+        : undefined,
+    };
+
+    return JSON.stringify(response, null, 2);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
+    return JSON.stringify({ error: errorMessage }, null, 2);
+  }
+}
+
+/**
  * Route tool calls to appropriate handlers
  */
 export async function handleToolCall(
@@ -335,6 +472,8 @@ export async function handleToolCall(
       return handleGetDiscountInfo();
     case 'lookup_fare':
       return handleLookupFare(args as Parameters<typeof handleLookupFare>[0]);
+    case 'calculate_tpass_cross_month':
+      return handleCalculateTPASSCrossMonth(args as Parameters<typeof handleCalculateTPASSCrossMonth>[0]);
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }

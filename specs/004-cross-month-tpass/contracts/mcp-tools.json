@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Cross-Month TPASS Calculation MCP Tools",
+  "description": "MCP tool definitions for cross-month TPASS fare calculation",
+  "tools": [
+    {
+      "name": "calculate_fare",
+      "description": "Calculate TPASS vs regular fare comparison with automatic cross-month handling. When period crosses month boundaries, automatically includes monthly breakdown showing discount tiers applied separately per month.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Start date for TPASS validity period in YYYY-MM-DD format. Defaults to next working day."
+          },
+          "oneWayFare": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 40,
+            "description": "One-way fare amount in NTD"
+          },
+          "tripsPerDay": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 2,
+            "description": "Number of trips per working day"
+          },
+          "customWorkingDays": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Override auto-calculated working days (optional)"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["tpassCost", "regularCost", "recommendation"],
+        "properties": {
+          "tpassCost": { "type": "number", "description": "TPASS monthly pass cost" },
+          "regularCost": { "type": "number", "description": "Regular fare cost with discounts applied" },
+          "regularCostBeforeDiscount": { "type": "number", "description": "Regular fare cost without discounts" },
+          "savingsAmount": { "type": "number", "description": "Savings amount (negative means TPASS saves money)" },
+          "savingsPercentage": { "type": "number", "description": "Savings percentage" },
+          "recommendation": { "type": "string", "enum": ["BUY_TPASS", "USE_REGULAR"] },
+          "recommendationReason": { "type": "string" },
+          "details": {
+            "type": "object",
+            "properties": {
+              "workingDays": { "type": "integer" },
+              "totalTrips": { "type": "integer" },
+              "discountRate": { "type": "number", "description": "Approximate discount rate (for display only)" },
+              "discountTier": { "type": "string" },
+              "discountNote": {
+                "type": "string",
+                "description": "Important note explaining cross-month discount calculation"
+              },
+              "periodStart": { "type": "string", "format": "date" },
+              "periodEnd": { "type": "string", "format": "date" },
+              "crossesMonthBoundary": { "type": "boolean" }
+            }
+          },
+          "monthlyBreakdown": {
+            "type": "array",
+            "description": "Only present when crossesMonthBoundary is true",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": { "type": "string" },
+                "year": { "type": "integer" },
+                "dateRange": { "type": "string" },
+                "workingDays": { "type": "integer" },
+                "trips": { "type": "integer" },
+                "baseFare": { "type": "string" },
+                "originalCost": { "type": "string" },
+                "discountTier": { "type": "string" },
+                "discountAmount": { "type": "string" },
+                "finalCost": { "type": "string" }
+              }
+            }
+          },
+          "holidays": {
+            "type": "object",
+            "properties": {
+              "totalHolidays": { "type": "integer" },
+              "list": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": { "type": "string" },
+                    "name": { "type": "string" },
+                    "description": { "type": "string" },
+                    "isWeekend": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    {
+      "name": "calculate_tpass_cross_month",
+      "description": "Calculate TPASS with detailed monthly breakdown (alternative tool with explicit cross-month focus)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Start date for TPASS validity period"
+          },
+          "oneWayFare": {
+            "type": "number",
+            "default": 40,
+            "description": "One-way fare amount in NTD"
+          },
+          "tripsPerDay": {
+            "type": "number",
+            "default": 2,
+            "description": "Number of trips per working day"
+          },
+          "customWorkingDays": {
+            "type": "number",
+            "description": "Override auto-calculated working days"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "crossesMonthBoundary": { "type": "boolean" },
+          "totalOriginalCost": { "type": "number" },
+          "totalDiscountAmount": { "type": "number" },
+          "totalFinalCost": { "type": "number" },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "monthName": { "type": "string" },
+                "startDate": { "type": "string", "format": "date" },
+                "endDate": { "type": "string", "format": "date" },
+                "workingDays": { "type": "integer" },
+                "trips": { "type": "integer" },
+                "originalCost": { "type": "number" },
+                "discountRate": { "type": "number" },
+                "discountAmount": { "type": "number" },
+                "finalCost": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "get_discount_info",
+      "description": "Get TPASS discount tier information",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "trips": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of trips to check discount for (optional)"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "tiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "min_trips": { "type": "integer" },
+                "max_trips": {
+                  "type": ["integer", "null"]
+                },
+                "discount_percent": {
+                  "type": "integer",
+                  "enum": [0, 10, 15, 20]
+                },
+                "description": { "type": "string" }
+              }
+            }
+          },
+          "applied_tier": {
+            "type": "object",
+            "properties": {
+              "trips": { "type": "integer" },
+              "discount_percent": { "type": "integer" },
+              "description": { "type": "string" }
+            },
+            "description": "Only included if trips parameter was provided"
+          }
+        }
+      }
+    }
+  ]
+}
