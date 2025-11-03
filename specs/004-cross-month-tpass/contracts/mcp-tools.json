@@ -108,54 +108,45 @@
       }
     },
     {
-      "name": "calculate_tpass_cross_month",
-      "description": "Calculate TPASS with detailed monthly breakdown (alternative tool with explicit cross-month focus)",
+      "name": "lookup_fare",
+      "description": "Lookup Taipei Metro fare between two stations or validate manual fare input",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "startDate": {
+          "fare": {
+            "type": "number",
+            "description": "Manual fare amount in NTD (cannot be used with origin/destination)"
+          },
+          "origin": {
             "type": "string",
-            "format": "date",
-            "description": "Start date for TPASS validity period"
+            "description": "Origin station name in Chinese (required with destination)"
           },
-          "oneWayFare": {
-            "type": "number",
-            "default": 40,
-            "description": "One-way fare amount in NTD"
+          "destination": {
+            "type": "string",
+            "description": "Destination station name in Chinese (required with origin)"
           },
-          "tripsPerDay": {
-            "type": "number",
-            "default": 2,
-            "description": "Number of trips per working day"
-          },
-          "customWorkingDays": {
-            "type": "number",
-            "description": "Override auto-calculated working days"
+          "fareType": {
+            "type": "string",
+            "enum": ["regular", "discounted"],
+            "default": "regular",
+            "description": "Fare type: regular or discounted"
           }
         }
       },
       "outputSchema": {
         "type": "object",
         "properties": {
-          "crossesMonthBoundary": { "type": "boolean" },
-          "totalOriginalCost": { "type": "number" },
-          "totalDiscountAmount": { "type": "number" },
-          "totalFinalCost": { "type": "number" },
-          "segments": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "monthName": { "type": "string" },
-                "startDate": { "type": "string", "format": "date" },
-                "endDate": { "type": "string", "format": "date" },
-                "workingDays": { "type": "integer" },
-                "trips": { "type": "integer" },
-                "originalCost": { "type": "number" },
-                "discountRate": { "type": "number" },
-                "discountAmount": { "type": "number" },
-                "finalCost": { "type": "number" }
-              }
+          "success": { "type": "boolean" },
+          "fare": { "type": "number", "description": "Fare amount in NTD" },
+          "origin": { "type": "string" },
+          "destination": { "type": "string" },
+          "fareType": { "type": "string" },
+          "suggestions": {
+            "type": "object",
+            "description": "Station name suggestions if exact match not found",
+            "properties": {
+              "origin": { "type": "array", "items": { "type": "string" } },
+              "destination": { "type": "array", "items": { "type": "string" } }
             }
           }
         }

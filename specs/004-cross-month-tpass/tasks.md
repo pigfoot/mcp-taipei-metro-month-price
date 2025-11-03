@@ -53,8 +53,8 @@ Core components that all user stories depend on.
 
 - [x] T017 [US2] Create formatMonthlyBreakdown function in src/services/tpass-calculator.ts
 - [x] T018 [US2] Update MCP tool response schema in src/adapters/mcp/tools.ts
-- [x] T019 [P] [US2] Implement monthly_breakdown field in calculate_tpass_cross_month tool
-- [x] T020 [P] [US2] Add comparison with old calculation method in response
+- [x] T019 [P] [US2] Implement monthly_breakdown field in calculate_fare tool (auto-included when crossesMonthBoundary)
+- [x] T020 [P] [US2] Add discountNote to explain cross-month calculation behavior
 
 ### Phase 5: User Story 3 - Validate Discount Tier Rules (P3)
 
