@@ -1,12 +1,18 @@
 /**
- * OpenAI Apps SDK adapter
- * Provides integration layer for OpenAI Apps (future)
+ * OpenAI Apps SDK adapter with user-agent aware routing and widget support
+ * Provides integration layer for OpenAI Apps with dual-protocol compatibility
  */
 
 import { calculateTPASSComparison, getDiscountInfo } from '../../services/calculator.js';
 import { parseDate, formatDate } from '../../lib/utils.js';
 import { getDiscountTierDescription } from '../../models/discount.js';
-import { openAIFunctionSchemas } from './functions.js';
+import { openAIFunctionSchemas, createWidgetEnhancedFunction } from './functions.js';
+import { detectUserAgent } from '../../lib/userAgentDetection.js';
+import { createResultWidget, createFormWidget, createErrorWidget } from './widgets.js';
+import { renderWidgetWithFallback } from '../../lib/widgetFallback.js';
+import { validateMessageSize, createTruncationStrategy } from '../../lib/messageValidator.js';
+import type { UserAgentInfo } from '../../lib/userAgentDetection.js';
+import type { WidgetConfiguration, FormatterData } from '../../lib/responseFormatter.js';
 
 /**
  * OpenAI function call parameters
