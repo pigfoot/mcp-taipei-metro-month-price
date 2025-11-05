@@ -1,0 +1,184 @@
+name: Build Multi-Arch Images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Custom tag name (optional, defaults to manual-<sha>)'
+        required: false
+        default: ''
+      platforms:
+        description: 'Platforms to build (comma-separated)'
+        required: false
+        default: 'linux/amd64,linux/arm64'
+      skip_push:
+        description: 'Build only (do not push to registries)'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: mcp-taipei-metro-month-price
+  PLATFORMS: linux/amd64,linux/arm64
+  DOCKER_FORMAT: docker
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      docker_hub_digest: ${{ steps.push_dockerhub.outputs.digest }}
+      ghcr_digest: ${{ steps.push_ghcr.outputs.digest }}
+      platforms: ${{ steps.build.outputs.platforms }}
+      cache_hit: ${{ steps.cache.outputs.cache-hit }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "ERROR: DOCKERHUB_USERNAME secret not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "ERROR: DOCKERHUB_TOKEN secret not configured"
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Validate Semantic Versioning
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: Tag '$TAG' does not follow semantic versioning (expected: v1.2.3)"
+            echo "Please create a tag matching the pattern: v[major].[minor].[patch]"
+            exit 1
+          fi
+
+      - name: Extract version metadata
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG=${GITHUB_REF#refs/tags/v}
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag_name }}" ]]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+            echo "tag=manual-$SHORT_SHA" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Restore Bun dependency cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Delete old "latest" from GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/${{ env.IMAGE_NAME }}/versions" \
+            -f tag=latest || echo "No previous latest tag found (this is okay for first build)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old "latest" from Docker Hub
+        if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          curl -X DELETE \
+            -H "Authorization: JWT ${TOKEN}" \
+            https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}/tags/latest/ \
+            || echo "No previous latest tag found (this is okay for first build)"
+
+      - name: Build multi-arch image
+        id: build
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta.outputs.tag }}
+          platforms: ${{ github.event.inputs.platforms || env.PLATFORMS }}
+          containerfiles: ./Containerfile
+          extra-args: |
+            --format ${{ env.DOCKER_FORMAT }}
+            --ulimit nofile=65536:65536
+          build-args: |
+            NPM_CONFIG_MAXSOCKETS=5
+        env:
+          BUILDAH_ISOLATION: rootless
+
+      - name: Push to GHCR with retry
+        if: github.event.inputs.skip_push != 'true'
+        id: push_ghcr
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          exponential_backoff: true
+          command: |
+            echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+            podman manifest push \
+              ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+              docker://ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+
+      - name: Push to Docker Hub with retry
+        if: github.event.inputs.skip_push != 'true'
+        id: push_dockerhub
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          exponential_backoff: true
+          command: |
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login docker.io -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+            podman manifest push \
+              ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+              docker://docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+
+      - name: Output build metrics
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: ${{ steps.meta.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms**: ${{ steps.build.outputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cache Hit**: ${{ steps.cache.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHCR**: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Hub**: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}" >> $GITHUB_STEP_SUMMARY

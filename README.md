@@ -456,6 +456,52 @@ For production use, consider:
 - Performance monitoring and optimization
 - Rate limiting for API calls
 
+## CI/CD & Container Deployment
+
+### Automated Multi-Architecture Builds
+
+This project uses GitHub Actions to automatically build and publish multi-architecture container images (amd64/arm64) to both Docker Hub and GitHub Container Registry.
+
+**Automated Triggers**:
+- **Main branch**: Every push builds and publishes `latest` tag
+- **Version tags**: Creating tags like `v1.2.3` builds and publishes versioned images
+
+### GitHub Secrets Setup
+
+Before automated builds can work, configure these repository secrets:
+
+1. Go to **Settings → Secrets and variables → Actions**
+2. Add the following secrets:
+
+| Secret Name | Description | How to Get |
+|-------------|-------------|------------|
+| `DOCKERHUB_USERNAME` | Docker Hub username | Your Docker Hub account username |
+| `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token | Create at [Docker Hub Security](https://hub.docker.com/settings/security) with `repo:delete` scope |
+
+**Note**: `GITHUB_TOKEN` is automatically provided for GitHub Container Registry.
+
+### Pulling Published Images
+
+```bash
+# Latest from Docker Hub
+podman pull docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest
+
+# Specific version from GHCR
+podman pull ghcr.io/<username>/mcp-taipei-metro-month-price:1.0.0
+
+# Run container
+podman run --rm docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest --help
+```
+
+### Manual Workflow Trigger
+
+You can also trigger builds manually via GitHub UI:
+1. Go to **Actions → Build Multi-Arch Images**
+2. Click **Run workflow**
+3. Optionally specify custom tag or test without pushing
+
+---
+
 ## License
 
 MIT

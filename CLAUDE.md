@@ -17,6 +17,8 @@ Auto-generated from all feature plans. Last updated: 2025-10-28
   - Widget-based interaction with step-by-step guidance for TPASS calculations
   - Response formatting for both MCP JSON-RPC and OpenAI Apps function calls
   - User-agent detection with "openai-mcp" prefix identification
+- YAML (GitHub Actions workflow), Bash (supporting scripts) (006-ci-cd-multiarch-images)
+- GitHub Actions cache for build layers (006-ci-cd-multiarch-images)
 
 - TypeScript 5.x / Bun 1.x runtime (001-tpass-calculator)
 
@@ -59,10 +61,9 @@ Examples of files that should NOT be committed:
 **Exception**: If a temporary test demonstrates important validation logic, refactor it into a proper test in `tests/` directory before committing.
 
 ## Recent Changes
+- 006-ci-cd-multiarch-images: ✅ Implemented GitHub Actions workflow for multi-arch container builds (amd64/arm64) with rootless buildah, automated publishing to Docker Hub and GHCR, build caching, semantic versioning validation, and failure recovery
 - 005-openai-app-sdk: Added OpenAI Apps Functions Schema v1.0 integration with dual-protocol support via user-agent detection and widget rendering
 - 005-openai-app-sdk: Extended project documentation with OpenAI Apps integration details
-- 004-cross-month-tpass: Added TypeScript 5.x with Bun 1.x runtime + @modelcontextprotocol/sdk (MCP server implementation)
-- 003-fare-lookup: Added TypeScript 5.9.3 / Bun 1.x + @modelcontextprotocol/sdk v1.20.2, fuzzysort (for fuzzy matching)
 
 
 <!-- MANUAL ADDITIONS START -->
