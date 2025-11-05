@@ -70,7 +70,7 @@ Represents a multi-architecture container image published to registries.
 
 **Validation Rules**:
 - `architectures` array MUST contain exactly 2 entries: `["amd64", "arm64"]` (FR-003, FR-018)
-- `tag` MUST be either `"latest"` or match regex `^v?[0-9]+\.[0-9]+\.[0-9]+$` (FR-007, FR-008, FR-022)
+- `tag` MUST be either `"latest"` or match regex `^v[0-9]+\.[0-9]+\.[0-9]+$` (FR-007, FR-008, FR-022)
 - `manifest_digest` MUST be identical across both registries (same content hash)
 
 ---

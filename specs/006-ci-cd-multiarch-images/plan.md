@@ -274,7 +274,7 @@ podman manifest create mcp-taipei-metro-month-price:latest
 podman build --format docker --platform linux/amd64,linux/arm64 \
   --manifest mcp-taipei-metro-month-price:latest .
 podman manifest push mcp-taipei-metro-month-price:latest \
-  docker://docker.io/USERNAME/mcp-taipei-metro-month-price:latest
+  docker://docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest
 ```
 
 ---

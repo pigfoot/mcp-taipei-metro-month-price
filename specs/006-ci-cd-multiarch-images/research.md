@@ -95,8 +95,10 @@ How to delete old "latest" images from Docker Hub programmatically?
 Use Docker Hub API v2 with Personal Access Token
 
 ```bash
+# Secure JSON payload construction using jq to prevent shell injection
+PAYLOAD=$(jq -n --arg u "$DOCKERHUB_USERNAME" --arg p "$DOCKERHUB_TOKEN" '{username: $u, password: $p}')
 TOKEN=$(curl -s -H "Content-Type: application/json" \
-  -X POST -d '{"username": "'${DOCKERHUB_USERNAME}'", "password": "'${DOCKERHUB_TOKEN}'"}' \
+  -X POST -d "$PAYLOAD" \
   https://hub.docker.com/v2/users/login/ | jq -r .token)
 
 curl -X DELETE \

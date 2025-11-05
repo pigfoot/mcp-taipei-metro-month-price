@@ -281,7 +281,7 @@ Last error: 503 Service Unavailable
 curl -I https://hub.docker.com/health
 
 # Verify credentials work
-podman login docker.io -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+echo "$DOCKERHUB_TOKEN" | podman login docker.io -u $DOCKERHUB_USERNAME --password-stdin
 
 # Check token has correct permissions
 # Token should have: "Read, Write, Delete" scopes

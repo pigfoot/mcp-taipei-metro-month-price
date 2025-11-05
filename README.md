@@ -484,13 +484,13 @@ Before automated builds can work, configure these repository secrets:
 
 ```bash
 # Latest from Docker Hub
-podman pull docker.io/<username>/mcp-taipei-metro-month-price:latest
+podman pull docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest
 
 # Specific version from GHCR
 podman pull ghcr.io/<username>/mcp-taipei-metro-month-price:1.0.0
 
 # Run container
-podman run --rm docker.io/<username>/mcp-taipei-metro-month-price:latest --help
+podman run --rm docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest --help
 ```
 
 ### Manual Workflow Trigger
