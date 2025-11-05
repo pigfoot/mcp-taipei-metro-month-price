@@ -1,11 +1,13 @@
 /**
- * Health check endpoint handler
+ * Health check endpoint handler with dual-protocol support
+ * Reports status for both MCP and OpenAI Apps protocols
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { HealthCheckResponse } from '../types/server.js';
 import { APP_INFO } from '../config.js';
 import { tools } from '../adapters/mcp/tools.js';
+import { openAIFunctionSchemas } from '../adapters/openai/functions.js';
 
 /**
  * Handle health check request
@@ -32,10 +34,33 @@ export function handleHealthCheck(
       name: APP_INFO.name,
       version: APP_INFO.version,
       uptime,
+      features: [
+        'dual-protocol-support',
+        'user-agent-detection',
+        'widget-responses',
+        'backward-compatibility',
+        'openai-apps-integration',
+      ],
     },
-    mcp: {
-      connected,
-      toolsAvailable: tools.length,
+    protocols: {
+      mcp: {
+        connected,
+        toolsAvailable: tools.length,
+        transport: 'stdio + http',
+        version: '2.0',
+      },
+      'openai-apps': {
+        supported: true,
+        functionsAvailable: openAIFunctionSchemas.length,
+        features: ['function-calls', 'widgets', 'step-by-step'],
+        version: 'apps-schema-v1.0',
+      },
+    },
+    detection: {
+      method: 'user-agent',
+      patterns: ['openai-mcp/*', 'openai.*mcp'],
+      fallback: 'mcp',
+      confidence: 'high',
     },
     timestamp: new Date().toISOString(),
   };
