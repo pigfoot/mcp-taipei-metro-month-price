@@ -62,6 +62,63 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      - name: Install podman-static for heredoc support
+        run: |
+          echo "=== Ubuntu default podman version ==="
+          podman --version
+
+          # Containerfile uses RUN <<EOT heredoc syntax which requires buildah >= 1.35.0
+          # (ref: containers/buildah#140)
+          #
+          # Attempted solutions that FAILED:
+          # 1. Ubuntu 24.04 default:
+          #    - buildah 1.33.7 (too old, no heredoc support)
+          #    - podman 4.9.3 (uses buildah 1.33.7 internally)
+          #    ❌ Error: "Unknown instruction: APT-GET" (heredoc not recognized)
+          #
+          # 2. redhat-actions/buildah-build@v2 action:
+          #    - Uses runner's system buildah (1.33.7 on Ubuntu 24.04)
+          #    ❌ Same heredoc compatibility issue
+          #
+          # 3. Kubic unstable repository (devel:kubic:libcontainers:unstable):
+          #    - buildah 1.39.4 ✓ (supports heredoc)
+          #    - containers-common (requires virtual package 'oci-runtime')
+          #    - Does NOT provide: crun, runc, or podman packages
+          #    ❌ Error: "unknown version specified" from incompatible crun
+          #    Even with fake oci-runtime package, falls back to Ubuntu's crun 1.14.1
+          #    which is incompatible with buildah 1.39.4
+          #
+          # WORKING SOLUTION: podman-static v5.6.2
+          # - Self-contained static binary from mgoltzsche/podman-static
+          # - Includes modern buildah with heredoc support
+          # - No external dependencies (crun, runc, etc.)
+          # - Tested and verified: heredoc syntax works correctly
+
+          echo ""
+          echo "=== Downloading podman-static v5.6.2 ==="
+          curl -fsSL -o /tmp/podman-linux-amd64.tar.gz \
+            https://github.com/mgoltzsche/podman-static/releases/latest/download/podman-linux-amd64.tar.gz
+
+          echo ""
+          echo "=== Installing podman-static ==="
+          cd /tmp && tar -xzf podman-linux-amd64.tar.gz
+          sudo cp -r podman-linux-amd64/usr/* /usr/
+          sudo cp -r podman-linux-amd64/etc/* /etc/ 2>/dev/null || true
+
+          echo ""
+          echo "=== Configure rootless podman ==="
+          # Initialize user namespace for rootless mode
+          podman system migrate
+
+          # Verify configuration
+          echo ""
+          echo "=== Updated podman version ==="
+          podman --version
+
+          echo ""
+          echo "=== Test podman functionality ==="
+          podman info --format "{{.Host.Security.Rootless}}"
+
       - name: Validate Semantic Versioning
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -130,19 +187,20 @@ jobs:
 
       - name: Build multi-arch image
         id: build
-        uses: redhat-actions/buildah-build@v2
-        with:
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.meta.outputs.tag }}
-          platforms: ${{ github.event.inputs.platforms || env.PLATFORMS }}
-          containerfiles: ./Containerfile
-          extra-args: |
-            --format ${{ env.DOCKER_FORMAT }}
-            --ulimit nofile=65536:65536
-          build-args: |
-            NPM_CONFIG_MAXSOCKETS=5
-        env:
-          BUILDAH_ISOLATION: rootless
+        run: |
+          PLATFORMS="${{ github.event.inputs.platforms || env.PLATFORMS }}"
+          echo "Building for platforms: $PLATFORMS"
+          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+
+          # Build multi-arch manifest
+          podman build \
+            --platform "$PLATFORMS" \
+            --format docker \
+            --manifest ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+            --ulimit nofile=65536:65536 \
+            --build-arg NPM_CONFIG_MAXSOCKETS=5 \
+            -f ./Containerfile \
+            .
 
       - name: Push to GHCR with retry
         if: github.event.inputs.skip_push != 'true'
