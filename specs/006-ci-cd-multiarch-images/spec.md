@@ -121,8 +121,8 @@ As a developer, when automated builds run, they utilize build caching mechanisms
 - **SC-001**: Developers can deploy new versions by simply pushing to main branch without manual build steps
 - **SC-002**: Users can pull container images from both Docker Hub (docker.io) and GitHub Container Registry (ghcr.io) successfully
 - **SC-003**: Images work correctly on both amd64 and arm64 systems without requiring separate tags
-- **SC-004**: Build workflows complete within 15 minutes for typical code changes
-- **SC-005**: Cached builds complete in 50% or less time compared to clean builds
+- **SC-004**: Build workflows complete within 3 minutes for typical code changes (using native ARM64 runners)
+- **SC-005**: Cached builds complete in ≤2 minutes (50% of 3-minute clean build)
 - **SC-006**: Only one "latest" tagged image exists in each registry at any given time
 - **SC-007**: Version-tagged images remain available indefinitely in registries
 - **SC-008**: 100% of builds produce both architecture variants or fail entirely (no partial builds published)

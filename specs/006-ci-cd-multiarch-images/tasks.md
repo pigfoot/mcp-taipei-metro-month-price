@@ -60,7 +60,7 @@
 ### Implementation for User Story 1
 
 - [X] T011 [P] [US1] Add Bun dependency cache step using `actions/cache@v4` with key `bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}` and paths `~/.bun/install/cache, node_modules` in `.github/workflows/build-images.yml`
-- [X] T012 [US1] Add multi-arch build step using `redhat-actions/buildah-build@v2` with platforms `linux/amd64,linux/arm64`, image name from env var, tags `latest`, containerfiles `./Containerfile`, extra-args `--format docker` in `.github/workflows/build-images.yml`
+- [X] T012 [US1] Add multi-arch build step using podman-static (installed in T010) with platforms `linux/amd64,linux/arm64`, image name from env var, tags `latest`, containerfiles `./Containerfile`, build command includes `--format docker` flag (required for FR-010 HEALTHCHECK support) in `.github/workflows/build-images.yml`
 - [X] T013 [US1] Create step to delete old "latest" from GHCR using `gh api --method DELETE` to `/user/packages/container/mcp-taipei-metro-month-price/versions` with tag filter in `.github/workflows/build-images.yml`
 - [X] T014 [P] [US1] Create step to delete old "latest" from Docker Hub using curl with API v2 DELETE endpoint (requires JWT auth with DOCKERHUB_TOKEN) in `.github/workflows/build-images.yml`
 - [X] T015 [US1] Add GHCR push step using `redhat-actions/push-to-registry@v2` with registry `ghcr.io/${{ github.repository_owner }}`, wrapped in `nick-fields/retry@v2` (3 attempts, exponential backoff) in `.github/workflows/build-images.yml`
@@ -137,7 +137,7 @@
 - [X] T036 [P] Configure workflow permissions: `contents: read`, `packages: write` in `.github/workflows/build-images.yml`
 - [X] T037 [P] Add workflow dispatch inputs: custom tag_name, platforms override, skip_push boolean for testing in `.github/workflows/build-images.yml`
 - [X] T038 [P] Run actionlint validation: `actionlint .github/workflows/build-images.yml` to catch YAML syntax errors
-- [X] T039 Test manual workflow dispatch: trigger via GitHub UI with custom tag, verify build runs successfully
+- [X] T039 Test manual workflow dispatch (validates FR-017): trigger via GitHub UI with custom tag, verify build runs successfully and workflow_dispatch functionality works as expected
 - [X] T040 End-to-end test (main branch): push commit → wait for completion → verify images on both registries → pull and run on amd64 → verify architecture
 - [X] T041 End-to-end test (version tag): create v1.0.0 tag → push → wait for completion → verify images on both registries → pull and run
 - [X] T042 [P] Update CLAUDE.md Recent Changes section with new workflow and best practices learned

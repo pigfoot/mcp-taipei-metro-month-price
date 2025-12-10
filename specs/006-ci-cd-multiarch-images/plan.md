@@ -212,7 +212,7 @@ Expected task categories:
 ### Known Challenges
 
 1. **Challenge**: Docker Hub API v2 requires separate authentication token for deletion operations
-   **Mitigation**: Use Docker Hub Personal Access Token (PAT) with `repo:delete` scope stored in `DOCKERHUB_TOKEN` secret
+   **Mitigation**: Use Docker Hub Personal Access Token (PAT) with Delete permission for the repository stored in `DOCKERHUB_TOKEN` secret
 
 2. **Challenge**: GitHub Actions cache has 10GB limit per repository
    **Mitigation**: Cache only Bun dependencies and final TypeScript outputs, not intermediate layers; set 7-day TTL
