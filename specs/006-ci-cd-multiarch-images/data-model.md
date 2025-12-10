@@ -174,7 +174,7 @@ Represents configuration data required by the workflow (not code, but external d
 | Secret Name | Type | Purpose | Validation |
 |-------------|------|---------|------------|
 | `DOCKERHUB_USERNAME` | string | Docker Hub account username | Required for push |
-| `DOCKERHUB_TOKEN` | string | Docker Hub PAT with `repo:delete` scope | Required for push + deletion |
+| `DOCKERHUB_TOKEN` | string | Docker Hub PAT with Delete permission for the repository | Required for push + deletion |
 | `GITHUB_TOKEN` | string | Automatic GitHub Actions token | Auto-provided, `packages:write` permission needed |
 
 **Environment Variables** (defined in workflow YAML):

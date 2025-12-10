@@ -476,7 +476,7 @@ Before automated builds can work, configure these repository secrets:
 | Secret Name | Description | How to Get |
 |-------------|-------------|------------|
 | `DOCKERHUB_USERNAME` | Docker Hub username | Your Docker Hub account username |
-| `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token | Create at [Docker Hub Security](https://hub.docker.com/settings/security) with `repo:delete` scope |
+| `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token | Create at [Docker Hub Security](https://hub.docker.com/settings/security) with Delete permission for the repository |
 
 **Note**: `GITHUB_TOKEN` is automatically provided for GitHub Container Registry.
 
@@ -487,7 +487,7 @@ Before automated builds can work, configure these repository secrets:
 podman pull docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest
 
 # Specific version from GHCR
-podman pull ghcr.io/<username>/mcp-taipei-metro-month-price:1.0.0
+podman pull ghcr.io/<github_owner>/mcp-taipei-metro-month-price:1.0.0
 
 # Run container
 podman run --rm docker.io/<dockerhub-username>/mcp-taipei-metro-month-price:latest --help

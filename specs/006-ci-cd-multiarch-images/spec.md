@@ -52,20 +52,22 @@ As a release manager, when I create a new version tag (e.g., v1.2.0), the system
 
 ---
 
-### User Story 3 - Optimized Build Performance with Caching (Priority: P3)
+### User Story 3 - Optimized Build Performance with Container Layer Caching (Priority: P3)
 
-As a developer, when automated builds run, they utilize build caching mechanisms to speed up the build process by reusing unchanged dependencies and layers from previous builds.
+As a developer, when automated builds run, they utilize container layer caching to speed up the build process by reusing unchanged dependencies and layers from previous builds through Podman's built-in layer caching mechanism.
 
 **Why this priority**: Build optimization improves developer productivity and reduces CI costs, but the builds must work correctly first before optimization matters.
 
-**Independent Test**: Can be fully tested by running two consecutive builds with no code changes, measuring build times, and verifying that the second build completes significantly faster (e.g., 50%+ reduction) due to cache hits.
+**Independent Test**: Can be fully tested by running two consecutive builds with no code changes, measuring build times, and verifying that the second build completes significantly faster (e.g., 50%+ reduction) due to Podman reusing cached container layers.
 
 **Acceptance Scenarios**:
 
-1. **Given** no cached layers exist, **When** first build runs, **Then** all dependencies are downloaded and cached for future builds
-2. **Given** cached layers exist from previous build, **When** subsequent build runs with no dependency changes, **Then** build reuses cached layers
-3. **Given** only application code changed, **When** build runs, **Then** dependency layers are reused and only application layers rebuild
-4. **Given** build cache exists, **When** build time is measured, **Then** builds complete in 50% or less time compared to uncached builds
+1. **Given** no cached layers exist, **When** first build runs, **Then** all dependencies are downloaded and Podman caches the container layers for future builds
+2. **Given** cached layers exist from previous build, **When** subsequent build runs with no dependency changes, **Then** Podman reuses cached layers automatically
+3. **Given** only application code changed, **When** build runs, **Then** dependency layers are reused by Podman and only application layers rebuild
+4. **Given** container layer cache exists, **When** build time is measured, **Then** builds complete in 50% or less time compared to uncached builds
+
+**Note**: Caching is implemented through multi-stage Containerfile design (copying `package.json`/`bun.lockb` before source code), not through GitHub Actions `actions/cache`. Podman handles all caching automatically.
 
 ---
 
@@ -76,7 +78,6 @@ As a developer, when automated builds run, they utilize build caching mechanisms
 - **Missing "latest" images during cleanup**: When attempting to delete "latest" tagged images that don't exist or are already removed, the system MUST log a warning and continue with the workflow (treat as already cleaned up, idempotent operation)
 - **Concurrent build triggers**: When concurrent builds are triggered simultaneously (e.g., main push during tag creation), the system MUST cancel in-progress builds and start the newer one using concurrency groups with cancel-in-progress strategy
 - **Invalid tag format**: When tag names contain special characters or don't follow semantic versioning format (e.g., v1.2.3), the system MUST fail the build with a clear error message indicating the required format
-- **Build cache corruption**: When build cache is corrupted or unreadable, the system MUST clear the corrupted cache, log a warning, and proceed with clean build (cache automatically regenerated on next successful build)
 
 ## Requirements *(mandatory)*
 
@@ -92,19 +93,17 @@ As a developer, when automated builds run, they utilize build caching mechanisms
 - **FR-008**: System MUST tag images built from version tags with the corresponding version number (e.g., tag v1.2.0 creates image tag 1.2.0)
 - **FR-009**: System MUST remove previous images tagged as "latest" before pushing new "latest" images to prevent accumulation
 - **FR-010**: System MUST build images using Docker format (not OCI) to support HEALTHCHECK instruction in Containerfile
-- **FR-011**: System MUST utilize build caching mechanisms to optimize build performance for Bun and TypeScript projects
-- **FR-012**: System MUST create multi-architecture manifest for each image supporting both amd64 and arm64
-- **FR-013**: System MUST use the project's Containerfile as the build specification
-- **FR-014**: System MUST authenticate to Docker Hub (docker.io) using credentials stored in GitHub Secrets
-- **FR-015**: System MUST authenticate to GitHub Container Registry (ghcr.io) using GitHub token
-- **FR-016**: System MUST report build status (success/failure) visible in GitHub repository
-- **FR-017**: System MUST allow manual triggering of build workflows via workflow_dispatch
-- **FR-018**: System MUST fail the entire build and publish no images if any architecture build fails (all-or-nothing atomic build requirement)
-- **FR-019**: System MUST retry failed registry push operations up to 3 times with exponential backoff before failing the build
-- **FR-020**: System MUST treat deletion of non-existent "latest" images as successful (idempotent cleanup), logging a warning but continuing the workflow
-- **FR-021**: System MUST use concurrency groups to cancel in-progress builds when new builds are triggered, ensuring only the most recent build runs
-- **FR-022**: System MUST validate that version tags follow semantic versioning format (v[major].[minor].[patch], e.g., v1.2.3) and fail the build with clear error message if invalid
-- **FR-023**: System MUST detect corrupted or invalid build cache, clear it automatically, and fallback to clean build with appropriate logging
+- **FR-011**: System MUST create multi-architecture manifest for each image supporting both amd64 and arm64
+- **FR-012**: System MUST use the project's Containerfile as the build specification
+- **FR-013**: System MUST authenticate to Docker Hub (docker.io) using credentials stored in GitHub Secrets
+- **FR-014**: System MUST authenticate to GitHub Container Registry (ghcr.io) using GitHub token
+- **FR-015**: System MUST report build status (success/failure) visible in GitHub repository
+- **FR-016**: System MUST allow manual triggering of build workflows via workflow_dispatch
+- **FR-017**: System MUST fail the entire build and publish no images if any architecture build fails (all-or-nothing atomic build requirement)
+- **FR-018**: System MUST retry failed registry push operations up to 3 times with exponential backoff before failing the build
+- **FR-019**: System MUST treat deletion of non-existent "latest" images as successful (idempotent cleanup), logging a warning but continuing the workflow
+- **FR-020**: System MUST use concurrency groups to cancel in-progress builds when new builds are triggered, ensuring only the most recent build runs
+- **FR-021**: System MUST validate that version tags follow semantic versioning format (v[major].[minor].[patch], e.g., v1.2.3) and fail the build with clear error message if invalid
 
 ### Key Entities
 
@@ -121,8 +120,8 @@ As a developer, when automated builds run, they utilize build caching mechanisms
 - **SC-001**: Developers can deploy new versions by simply pushing to main branch without manual build steps
 - **SC-002**: Users can pull container images from both Docker Hub (docker.io) and GitHub Container Registry (ghcr.io) successfully
 - **SC-003**: Images work correctly on both amd64 and arm64 systems without requiring separate tags
-- **SC-004**: Build workflows complete within 15 minutes for typical code changes
-- **SC-005**: Cached builds complete in 50% or less time compared to clean builds
+- **SC-004**: Build workflows complete within 3 minutes for typical code changes (using native ARM64 runners)
+- **SC-005**: Cached builds complete in ≤2 minutes (50% of 3-minute clean build)
 - **SC-006**: Only one "latest" tagged image exists in each registry at any given time
 - **SC-007**: Version-tagged images remain available indefinitely in registries
 - **SC-008**: 100% of builds produce both architecture variants or fail entirely (no partial builds published)
@@ -156,3 +155,8 @@ As a developer, when automated builds run, they utilize build caching mechanisms
 - Automatic cleanup of old version-tagged images
 - Build notifications via external services (Slack, email, etc.)
 - Custom tag naming strategies beyond "latest" and version numbers
+- **Bun dependency caching in GitHub Actions**: Not needed because:
+  - GitHub Actions workflow doesn't run `bun install` directly (it runs inside the container)
+  - Container layer caching automatically handles dependency reuse
+  - Multi-stage Containerfile already optimizes cache invalidation by copying `package.json` and `bun.lockb` before source code
+  - Adding `actions/cache` for `~/.bun/install/cache` would cache files that are never accessed by the build process

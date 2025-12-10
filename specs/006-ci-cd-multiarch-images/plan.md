@@ -5,7 +5,7 @@
 
 ## Summary
 
-Implement automated GitHub Actions workflow for building and publishing multi-architecture (amd64/arm64) container images to Docker Hub and GitHub Container Registry. The workflow uses rootless buildah for container builds, implements build caching for Bun/TypeScript projects, manages "latest" tag cleanup, enforces semantic versioning for releases, and handles concurrent builds with proper failure recovery strategies.
+Implement automated GitHub Actions workflow for building and publishing multi-architecture (amd64/arm64) container images to Docker Hub and GitHub Container Registry using push-by-digest approach (2025 best practice). The workflow uses rootless podman for container builds, leverages container layer caching, manages "latest" tag cleanup, enforces semantic versioning for releases, and handles concurrent builds with proper failure recovery strategies.
 
 ## Technical Context
 
@@ -13,15 +13,15 @@ Implement automated GitHub Actions workflow for building and publishing multi-ar
 **Primary Dependencies**:
 - GitHub Actions native runners (ubuntu-24.04 for amd64, ubuntu-24.04-arm for arm64)
 - podman-static v5.6.2 (rootless container builds with heredoc support)
-- nick-fields/retry@v2 (retry logic with exponential backoff)
+- nick-fields/retry@v3 (retry logic with exponential backoff)
 
-**Storage**: GitHub Actions cache for Bun dependencies (architecture-specific)
+**Storage**: Podman container layer cache (automatic, no explicit configuration needed)
 **Testing**: Manual validation via workflow dispatch, automated integration tests via push/tag triggers
 **Target Platform**: Native ARM64 and AMD64 GitHub runners, output images for linux/amd64 and linux/arm64
 **Project Type**: Infrastructure/CI-CD (workflow configuration, no application code)
 **Performance Goals**:
-- Clean builds complete within 3 minutes (10-50x faster than QEMU)
-- Cached builds complete in ≤2 minutes (native execution, no emulation overhead)
+- Clean builds complete within 3 minutes (using native ARM64 runners, 10-50x faster than QEMU)
+- Cached builds complete in ≤2 minutes (container layer caching via Podman, reusing unchanged dependency layers)
 - Registry push operations complete within 1 minute per registry
 
 **Constraints**:
@@ -134,12 +134,13 @@ Containerfile                   # Existing file (referenced by workflow)
 **Status**: ✅ COMPLETED (see research.md)
 
 Research topics completed:
-1. ✅ Buildah caching mechanisms for Bun/TypeScript projects (2025 best practices)
-2. ✅ GitHub Container Registry (GHCR) image deletion API for "latest" cleanup
-3. ✅ Docker Hub API v2 for programmatic tag deletion
-4. ✅ GitHub Actions concurrency groups with cancel-in-progress strategy
-5. ✅ Multi-architecture manifest creation with buildah (--platform flag vs manual manifest)
-6. ✅ Semantic versioning validation patterns in GitHub Actions
+1. ✅ Push-by-digest multi-arch build pattern (2025 best practice, from github-actions-container-build skill)
+2. ✅ Container layer caching via Podman (automatic, no explicit cache configuration needed)
+3. ✅ GitHub Container Registry (GHCR) image deletion API for "latest" cleanup
+4. ✅ Docker Hub API v2 for programmatic tag deletion
+5. ✅ GitHub Actions concurrency groups with cancel-in-progress strategy
+6. ✅ Multi-architecture manifest creation with Podman (digest-based approach)
+7. ✅ Semantic versioning validation patterns in GitHub Actions
 
 **Outputs**: [research.md](./research.md)
 
@@ -155,8 +156,9 @@ Research topics completed:
 
 For infrastructure features, "data model" refers to workflow state and artifacts:
 - GitHub Actions workflow run states (queued, in_progress, completed, cancelled)
-- Container image artifacts (manifest, amd64 layer, arm64 layer)
-- Build cache structure (Bun dependency cache, TypeScript compilation cache)
+- Container image artifacts (multi-arch manifest, architecture-specific digests)
+- Digest artifacts (tiny ~70 byte files transferred between jobs: amd64-ghcr, arm64-ghcr, amd64-dockerhub, arm64-dockerhub)
+- Container layer cache (managed automatically by Podman, no explicit workflow state)
 - Registry metadata (image digests, tags, creation timestamps)
 
 ### 2. API Contracts
@@ -204,18 +206,18 @@ Expected task categories:
 
 ### Critical Success Factors
 
-1. **Atomic Builds (FR-018)**: Buildah must build both architectures in single manifest creation; if either fails, workflow exits with error code
+1. **Atomic Builds (FR-017)**: Matrix builds must use `fail-fast: false` but manifest job depends on all builds; if any architecture fails, manifest job skips (all-or-nothing)
 2. **Latest Tag Cleanup (FR-009)**: Must delete old "latest" before pushing to avoid accumulation; GitHub Container Registry supports `gh api` deletion, Docker Hub requires API v2 token auth
-3. **Cache Efficiency (SC-005)**: Bun lock file (`bun.lock`) must be cache key to invalidate on dependency changes; TypeScript compilation outputs cached separately
-4. **Concurrency (FR-021)**: `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` with `cancel-in-progress: true` prevents duplicate builds
+3. **Push-by-Digest Pattern**: Architecture-specific images pushed by digest without tags; tiny digest files (~70 bytes) transferred as artifacts; manifest created from digests
+4. **Concurrency (FR-020)**: `concurrency: group: build-images-${{ github.ref }}` with `cancel-in-progress: true` prevents duplicate builds
 
 ### Known Challenges
 
 1. **Challenge**: Docker Hub API v2 requires separate authentication token for deletion operations
-   **Mitigation**: Use Docker Hub Personal Access Token (PAT) with `repo:delete` scope stored in `DOCKERHUB_TOKEN` secret
+   **Mitigation**: Use Docker Hub Personal Access Token (PAT) with Delete permission for the repository stored in `DOCKERHUB_TOKEN` secret
 
-2. **Challenge**: GitHub Actions cache has 10GB limit per repository
-   **Mitigation**: Cache only Bun dependencies and final TypeScript outputs, not intermediate layers; set 7-day TTL
+2. **Challenge**: Container builds may have slow dependency installation
+   **Mitigation**: Podman automatically caches container layers; multi-stage Containerfile copies `package.json`/`bun.lockb` before source code to maximize layer reuse
 
 3. **Challenge**: Native ARM64 runners (`ubuntu-24.04-arm`) are only free for public repositories
    **Mitigation**: Repository is public; native runners provide 10-50x speedup over QEMU emulation (~2min vs ~20min)

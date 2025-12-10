@@ -59,12 +59,12 @@
 
 ### Implementation for User Story 1
 
-- [X] T011 [P] [US1] Add Bun dependency cache step using `actions/cache@v4` with key `bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}` and paths `~/.bun/install/cache, node_modules` in `.github/workflows/build-images.yml`
-- [X] T012 [US1] Add multi-arch build step using `redhat-actions/buildah-build@v2` with platforms `linux/amd64,linux/arm64`, image name from env var, tags `latest`, containerfiles `./Containerfile`, extra-args `--format docker` in `.github/workflows/build-images.yml`
-- [X] T013 [US1] Create step to delete old "latest" from GHCR using `gh api --method DELETE` to `/user/packages/container/mcp-taipei-metro-month-price/versions` with tag filter in `.github/workflows/build-images.yml`
-- [X] T014 [P] [US1] Create step to delete old "latest" from Docker Hub using curl with API v2 DELETE endpoint (requires JWT auth with DOCKERHUB_TOKEN) in `.github/workflows/build-images.yml`
-- [X] T015 [US1] Add GHCR push step using `redhat-actions/push-to-registry@v2` with registry `ghcr.io/${{ github.repository_owner }}`, wrapped in `nick-fields/retry@v2` (3 attempts, exponential backoff) in `.github/workflows/build-images.yml`
-- [X] T016 [US1] Add Docker Hub push step using `redhat-actions/push-to-registry@v2` with registry `docker.io/${{ secrets.DOCKERHUB_USERNAME }}`, wrapped in `nick-fields/retry@v2` (3 attempts, exponential backoff) in `.github/workflows/build-images.yml`
+- [X] T011 [US1] Add multi-arch build step using podman-static (installed in T010) with native ARM64 runners via matrix strategy, image name from env var, tags from prepare job, containerfile `./Containerfile`, build command includes `--format docker` flag (required for FR-010 HEALTHCHECK support) in `.github/workflows/build-images.yml`
+- [X] T012 [US1] Create step to delete old "latest" from GHCR using `gh api --method DELETE` to `/user/packages/container/mcp-taipei-metro-month-price/versions` with tag filter in `.github/workflows/build-images.yml`
+- [X] T013 [P] [US1] Create step to delete old "latest" from Docker Hub using curl with API v2 DELETE endpoint (requires JWT auth with DOCKERHUB_TOKEN) in `.github/workflows/build-images.yml`
+- [X] T014 [US1] Add GHCR push-by-digest step using `podman push --digestfile`, wrapped in `nick-fields/retry@v3` (3 attempts, exponential backoff) in `.github/workflows/build-images.yml`
+- [X] T015 [US1] Add Docker Hub push-by-digest step using `podman push --digestfile`, wrapped in `nick-fields/retry@v3` (3 attempts, exponential backoff) in `.github/workflows/build-images.yml`
+- [X] T016 [US1] Add digest artifact upload step using `actions/upload-artifact@v4` to transfer tiny digest files (~70 bytes) to manifest job in `.github/workflows/build-images.yml`
 - [X] T017 [US1] Add conditional logic: run latest cleanup + push steps only when `github.ref == 'refs/heads/main'` in `.github/workflows/build-images.yml`
 
 **Checkpoint**: At this point, pushing to main should successfully build and publish "latest" tagged multi-arch images to both registries
@@ -81,33 +81,29 @@
 
 ### Implementation for User Story 2
 
-- [X] T018 [P] [US2] Add semantic version validation step: check if tag matches `^v[0-9]+\.[0-9]+\.[0-9]+$` using grep, fail with error message if invalid, conditional on `startsWith(github.ref, 'refs/tags/')` in `.github/workflows/build-images.yml`
-- [X] T019 [US2] Add step to extract version from tag: strip "v" prefix from `github.ref` and store in TAG env var in `.github/workflows/build-images.yml`
-- [X] T020 [US2] Update buildah-build step: add conditional tag logic - if tag trigger, use extracted version; if main, use "latest" in `.github/workflows/build-images.yml`
+- [X] T018 [P] [US2] Add semantic version validation step: check if tag matches `^v[0-9]+\.[0-9]+\.[0-9]+$` using grep, fail with error message if invalid, conditional on `startsWith(github.ref, 'refs/tags/')` in prepare job of `.github/workflows/build-images.yml`
+- [X] T019 [US2] Add step to extract version from tag: strip "v" prefix from `github.ref` and store in metadata output in prepare job of `.github/workflows/build-images.yml`
+- [X] T020 [US2] Update manifest job: use dynamic tag from prepare job metadata (latest or version) when creating manifests in `.github/workflows/build-images.yml`
 - [X] T021 [US2] Ensure version-tagged builds do NOT delete previous versions (skip cleanup steps when tag trigger) in `.github/workflows/build-images.yml`
-- [X] T022 [US2] Update push steps to use dynamic tag (latest or version) based on trigger type in `.github/workflows/build-images.yml`
 
 **Checkpoint**: At this point, creating and pushing version tags should publish versioned multi-arch images without affecting previous versions
 
 ---
 
-## Phase 5: User Story 3 - Optimized Build Performance with Caching (Priority: P3)
+## Phase 5: User Story 3 - Optimized Build Performance with Container Layer Caching (Priority: P3)
 
-**Goal**: Builds reuse cached dependencies and layers to achieve 50%+ time reduction on consecutive builds
+**Goal**: Builds reuse cached container layers to achieve 50%+ time reduction on consecutive builds
 
-**Requirements Mapping**: Optimizes FR-011 (build caching), targets SC-004 (15min), SC-005 (50% reduction)
+**Requirements Mapping**: Container layer caching (automatic via Podman), targets SC-004 (3min clean), SC-005 (≤2min cached, 50% reduction)
 
-**Independent Test**: Run two builds with no code changes → second build completes in ≤7.5 min (first ~15 min)
+**Independent Test**: Run two builds with no code changes → second build completes in ≤2 min (first ~3 min, 50% reduction via Podman layer caching)
 
 ### Implementation for User Story 3
 
-- [X] T023 [P] [US3] Verify cache configuration from T011 includes correct paths: `~/.bun/install/cache` and `node_modules` in `.github/workflows/build-images.yml`
-- [X] T024 [P] [US3] Add cache key with restore-keys fallback: `restore-keys: ${{ runner.os }}-bun-` in `.github/workflows/build-images.yml`
-- [X] T025 [US3] Add step to output cache hit status using `steps.cache.outputs.cache-hit` for monitoring in `.github/workflows/build-images.yml`
-- [X] T026 [US3] Configure GitHub Actions cache settings: ensure cache is saved after successful builds (automatic with actions/cache@v4) in `.github/workflows/build-images.yml`
-- [X] T027 [US3] Add build duration measurement: capture start/end times and output total duration for performance tracking in `.github/workflows/build-images.yml`
+- [X] T022 [US3] Verify Containerfile multi-stage design: `COPY package.json bun.lockb` before `COPY ./src` to maximize layer reuse (already implemented in Containerfile)
+- [X] T023 [US3] Add build duration measurement: capture start/end times and output total duration for performance tracking in workflow summary (`.github/workflows/build-images.yml`)
 
-**Checkpoint**: At this point, consecutive builds with cache hits should complete in approximately half the time of clean builds
+**Checkpoint**: At this point, consecutive builds should complete in approximately half the time of clean builds due to Podman's automatic container layer caching
 
 ---
 
@@ -115,14 +111,14 @@
 
 **Purpose**: Implement robust failure recovery and edge case handling
 
-**Requirements Mapping**: Implements FR-018 (atomic builds), FR-019 (retry), FR-020 (idempotent cleanup), FR-021 (concurrency), FR-023 (cache corruption)
+**Requirements Mapping**: Implements FR-017 (atomic builds), FR-018 (retry), FR-019 (idempotent cleanup), FR-020 (concurrency)
 
-- [X] T028 [P] Add all-or-nothing build check: buildah-build@v2 fails entire workflow if any architecture fails (verify this is default behavior, no custom logic needed) in `.github/workflows/build-images.yml`
-- [X] T029 [P] Verify exponential backoff configuration in retry steps: 10s base, 3 attempts (already configured in T015, T016, ensure correct parameters) in `.github/workflows/build-images.yml`
-- [X] T030 [P] Add idempotent cleanup handling: wrap GHCR/Docker Hub delete steps in conditional or allow 404 errors (latest cleanup should not fail if tag doesn't exist) in `.github/workflows/build-images.yml`
-- [X] T031 Test concurrent build cancellation: push commit A, wait 30s, push commit B → verify commit A build is cancelled in GitHub Actions UI
-- [X] T032 Test invalid tag rejection: push tag `v1.0` → verify workflow fails with semantic versioning error message in GitHub Actions UI
-- [X] T033 Test partial architecture failure: intentionally break arm64 build in Containerfile → verify entire build fails and no images pushed in GitHub Actions UI
+- [X] T024 [P] Add all-or-nothing build check: matrix strategy with `fail-fast: false` + manifest job depends on all builds ensures entire workflow fails if any architecture fails in `.github/workflows/build-images.yml`
+- [X] T025 [P] Verify exponential backoff configuration in retry steps: 10s base, 3 attempts (configured in T014, T015, ensure correct parameters with retry@v3) in `.github/workflows/build-images.yml`
+- [X] T026 [P] Add idempotent cleanup handling: wrap GHCR/Docker Hub delete steps with `continue-on-error: true` (latest cleanup should not fail if tag doesn't exist) in `.github/workflows/build-images.yml`
+- [X] T027 Test concurrent build cancellation: push commit A, wait 30s, push commit B → verify commit A build is cancelled in GitHub Actions UI
+- [X] T028 Test invalid tag rejection: push tag `v1.0` → verify workflow fails with semantic versioning error message in GitHub Actions UI
+- [X] T029 Test partial architecture failure: intentionally break arm64 build in Containerfile → verify entire build fails and no images pushed in GitHub Actions UI
 
 ---
 
@@ -130,18 +126,18 @@
 
 **Purpose**: Final configuration, documentation, and end-to-end testing
 
-**Requirements Mapping**: Implements FR-016 (build status), FR-017 (workflow_dispatch), validates all FR/SC
+**Requirements Mapping**: Implements FR-015 (build status), FR-016 (workflow_dispatch), validates all FR/SC
 
-- [X] T034 [P] Add workflow outputs: tag published, docker_hub_digest, ghcr_digest, cache_hit, build_duration in `.github/workflows/build-images.yml`
-- [X] T035 [P] Add secrets validation step: check DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are set at workflow start, fail early with clear error if missing in `.github/workflows/build-images.yml`
-- [X] T036 [P] Configure workflow permissions: `contents: read`, `packages: write` in `.github/workflows/build-images.yml`
-- [X] T037 [P] Add workflow dispatch inputs: custom tag_name, platforms override, skip_push boolean for testing in `.github/workflows/build-images.yml`
-- [X] T038 [P] Run actionlint validation: `actionlint .github/workflows/build-images.yml` to catch YAML syntax errors
-- [X] T039 Test manual workflow dispatch: trigger via GitHub UI with custom tag, verify build runs successfully
-- [X] T040 End-to-end test (main branch): push commit → wait for completion → verify images on both registries → pull and run on amd64 → verify architecture
-- [X] T041 End-to-end test (version tag): create v1.0.0 tag → push → wait for completion → verify images on both registries → pull and run
-- [X] T042 [P] Update CLAUDE.md Recent Changes section with new workflow and best practices learned
-- [X] T043 [P] Add GitHub Secrets setup instructions to project README or CONTRIBUTING.md: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN requirements
+- [X] T030 [P] Add build summary output: tag published, registry URLs, pull commands to `GITHUB_STEP_SUMMARY` in `.github/workflows/build-images.yml`
+- [X] T031 [P] Add secrets validation step: check DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are set at workflow start, fail early with clear error if missing in `.github/workflows/build-images.yml`
+- [X] T032 [P] Configure workflow permissions: `contents: read`, `packages: write` in `.github/workflows/build-images.yml`
+- [X] T033 [P] Add workflow dispatch inputs: custom tag_name, skip_push boolean for testing in `.github/workflows/build-images.yml`
+- [X] T034 [P] Run actionlint validation: `actionlint .github/workflows/build-images.yml` to catch YAML syntax errors
+- [X] T035 Test manual workflow dispatch (validates FR-016): trigger via GitHub UI with custom tag, verify build runs successfully and workflow_dispatch functionality works as expected
+- [X] T036 End-to-end test (main branch): push commit → wait for completion → verify images on both registries → pull and run on amd64 → verify architecture
+- [X] T037 End-to-end test (version tag): create v1.0.0 tag → push → wait for completion → verify images on both registries → pull and run
+- [X] T038 [P] Update CLAUDE.md Recent Changes section with new workflow and push-by-digest best practice
+- [X] T039 [P] Add GitHub Secrets setup instructions to project README: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN requirements
 
 ---
 
@@ -174,7 +170,7 @@ Phase 7 (Polish) ← Final validation and documentation
 ### Critical Path
 
 ```
-T004 → T005 → T008 → T009 → T012 (buildah-build) → T015 (GHCR push) → T016 (Docker Hub push)
+T004 → T005 → T008 → T009 → T011 (build matrix) → T014 (GHCR digest) → T015 (Docker Hub digest) → T016 (artifact upload) → manifest job
 ```
 
 All other tasks can run in parallel or depend only on these critical tasks.
@@ -189,22 +185,22 @@ All other tasks can run in parallel or depend only on these critical tasks.
 - T006 (concurrency), T007 (env vars), T010 (podman-static) can run in parallel after T005
 
 **Phase 3 (US1)**:
-- T011 (cache), T013 (GHCR cleanup), T014 (Docker Hub cleanup) can run in parallel
-- T015 (GHCR push) and T016 (Docker Hub push) can run in parallel after T012
+- T012 (GHCR cleanup), T013 (Docker Hub cleanup) can run in parallel in prepare job
+- T014 (GHCR push-by-digest) and T015 (Docker Hub push-by-digest) can run in parallel in build job
 
 **Phase 4 (US2)**:
-- T018 (validation), T019 (tag extraction) can run in parallel
+- T018 (validation), T019 (tag extraction) can run in parallel in prepare job
 
 **Phase 5 (US3)**:
-- T023, T024, T025 all modify same cache step, run sequentially but T027 can be parallel
+- T022, T023 are verification tasks, can run in parallel
 
 **Phase 6 (Error Handling)**:
-- T028, T029, T030 can all run in parallel (independent edge case handling)
-- T031, T032, T033 are test tasks, can run in parallel
+- T024, T025, T026 can all run in parallel (independent edge case handling)
+- T027, T028, T029 are test tasks, can run in parallel
 
 **Phase 7 (Polish)**:
-- T034, T035, T036, T037, T038 all edit workflow file or docs, run in parallel
-- T042 (CLAUDE.md) and T043 (README) can run in parallel
+- T030, T031, T032, T033, T034 all edit workflow file or docs, run in parallel
+- T038 (CLAUDE.md) and T039 (README) can run in parallel
 
 ---
 

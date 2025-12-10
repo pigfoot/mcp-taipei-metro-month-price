@@ -108,7 +108,7 @@ curl -X DELETE \
 
 ### Rationale
 1. **API v2 requirement**: Docker Hub deprecated v1 API; v2 requires JWT authentication
-2. **PAT with delete scope**: Personal Access Token must have `repo:delete` permission
+2. **PAT with delete scope**: Personal Access Token must have Delete permission for the repository
 3. **Two-step auth**: Login to get JWT, then use JWT for deletion
 4. **Standard in 2025**: Docker Hub migrated all accounts to PAT-only auth (passwords deprecated)
 

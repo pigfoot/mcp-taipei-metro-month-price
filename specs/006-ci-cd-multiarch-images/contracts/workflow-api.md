@@ -119,7 +119,7 @@ Must be configured in repository settings before workflow can execute.
 | Secret Name | Type | Scope | Required For | Validation |
 |-------------|------|-------|--------------|------------|
 | `DOCKERHUB_USERNAME` | string | Docker Hub account username | Push to Docker Hub | Must not be empty |
-| `DOCKERHUB_TOKEN` | string | Personal Access Token with `repo:delete` | Push + delete on Docker Hub | Must have delete permission |
+| `DOCKERHUB_TOKEN` | string | Personal Access Token with Delete permission | Push + delete on Docker Hub | Must have delete permission for the repository |
 | `GITHUB_TOKEN` | string (auto) | Automatic GitHub Actions token | Push to GHCR | Auto-provided, requires `packages:write` |
 
 **Secret Validation** (performed at workflow start):
