@@ -1,43 +1,3 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Build outputs
-dist/
-build/
-out/
-*.tsbuildinfo
-
-# Bun
-.bun/
-bun.lockb
-
-# Environment variables
-.env
-.env.local
-.env*.local
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-bun-debug.log*
-lerna-debug.log*
-
-# Testing
-coverage/
-*.lcov
-.nyc_output
-
-# Cache directories
-.cache/
-.parcel-cache/
-.next/
-.nuxt/
-.vuepress/dist
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -52,62 +12,90 @@ coverage/
 *.sln
 *.sw?
 
-# Temporary files
-*.tmp
-tmp/
-temp/
-
-# Binary files
-bin/
-
 # OS files
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# TypeScript
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+lerna-debug.log*
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.bun/
+
+# Build outputs
+dist/
+build/
+out/
+bin/
 *.tsbuildinfo
 
-# Optional npm cache directory
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Cache directories
+.cache/
+.parcel-cache/
 .npm
-
-# Optional eslint cache
 .eslintcache
-
-# Optional stylelint cache
 .stylelintcache
 
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
+# Testing coverage
+coverage/
+*.lcov
+.nyc_output
 
-# Optional REPL history
-.node_repl_history
+# Spec-kit: Ignore all except constitution & memory
+# .specify contains user-specific workflow state and generated artifacts
+.specify/*
+!.specify/memory/
 
-# Output of 'npm pack'
-*.tgz
+# Claude Code session files
+.claude/
 
-# Yarn Integrity file
-.yarn-integrity
+# gemini cli/antigravity session files
+.agent/
+.gemini/
 
-# Project specific
+# Temporary test/debug files (never commit these to root)
+test-*.ts
+test-*.js
+test-*.py
+test-*.md
+debug-*.ts
+debug-*.js
+debug-*.py
+debug-*.md
+temp-*.ts
+temp-*.js
+temp-*.py
+temp-*.md
+scratch-*.*
+*-test.ts
+*-test.js
+*-test.py
+*-debug.ts
+*-debug.js
+*-debug.py
+
+# Project specific: Cache files with backups
 data/calendar-cache.json
 data/calendar-cache.json.backup.*
 data/fare-cache.json
 data/fare-cache.json.backup.*
-.claude/
-
-# Speckit memory (user-specific workflow state)
-.specify/memory/*
-!.specify/memory/constitution.md
-
-# Temporary test/debug files (never commit these)
-test-*.ts
-debug-*.ts
-temp-*.ts
-scratch-*.ts
-*-test.ts
-*-debug.ts

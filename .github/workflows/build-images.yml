@@ -1,0 +1,294 @@
+name: Build Multi-Arch Images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Custom tag name (optional, defaults to manual-<sha>)'
+        required: false
+        default: ''
+      skip_push:
+        description: 'Build only (do not push to registries)'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: mcp-taipei-metro-month-price
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_DOCKERHUB: docker.io
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Prepare build metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      is_release: ${{ steps.meta.outputs.is_release }}
+      skip_push: ${{ steps.meta.outputs.skip_push }}
+    steps:
+      - name: Validate secrets
+        if: github.event.inputs.skip_push != 'true'
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "ERROR: DOCKERHUB_USERNAME secret not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "ERROR: DOCKERHUB_TOKEN secret not configured"
+            exit 1
+          fi
+
+      - name: Validate Semantic Versioning
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: Tag '$TAG' does not follow semantic versioning (expected: v1.2.3)"
+            echo "Please create a tag matching the pattern: v[major].[minor].[patch]"
+            exit 1
+          fi
+
+      - name: Extract version metadata
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG=${GITHUB_REF#refs/tags/v}
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag_name }}" ]]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+            echo "tag=manual-$SHORT_SHA" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Set skip_push flag
+          if [[ "${{ github.event.inputs.skip_push }}" == "true" ]]; then
+            echo "skip_push=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_push=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Delete old "latest" from GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/${{ env.IMAGE_NAME }}/versions" \
+            -f tag=latest || echo "No previous latest tag found (this is okay for first build)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old "latest" from Docker Hub
+        if: github.ref == 'refs/heads/main' && github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        run: |
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          curl -X DELETE \
+            -H "Authorization: JWT ${TOKEN}" \
+            https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}/tags/latest/ \
+            || echo "No previous latest tag found (this is okay for first build)"
+
+  build:
+    name: Build image (${{ matrix.arch }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore Bun dependency cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Install podman-static for heredoc support
+        run: |
+          echo "=== Installing podman-static v5.6.2 ==="
+          # Why podman-static?
+          # - Containerfile uses RUN <<EOT heredoc syntax (requires buildah >= 1.35.0)
+          # - Ubuntu 24.04 podman (4.9.3) uses buildah 1.33.7 (too old, no heredoc)
+
+          curl -fsSL -o /tmp/podman-linux-amd64.tar.gz \
+            https://github.com/mgoltzsche/podman-static/releases/latest/download/podman-linux-amd64.tar.gz
+          cd /tmp && tar -xzf podman-linux-amd64.tar.gz
+
+          # Install binaries to /usr/bin (not /usr/local/bin) to avoid AppArmor issues
+          # Ref: https://github.com/mgoltzsche/podman-static#apparmor-profile
+          sudo cp -f podman-linux-amd64/usr/local/bin/* /usr/bin/
+          sudo cp -r podman-linux-amd64/etc/* /etc/ 2>/dev/null || true
+
+          # Initialize rootless podman
+          podman system migrate
+
+          echo "Podman installed to: $(which podman)"
+          podman --version
+
+      - name: Login to GHCR
+        if: needs.prepare.outputs.skip_push != 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login "$REGISTRY_GHCR" \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Login to Docker Hub
+        if: needs.prepare.outputs.skip_push != 'true'
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login "$REGISTRY_DOCKERHUB" \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            --password-stdin
+
+      - name: Build & push image (${{ matrix.arch }})
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 10
+          exponential_backoff: true
+          command: |
+            IMAGE_GHCR="$REGISTRY_GHCR/${{ github.repository_owner }}/$IMAGE_NAME"
+            IMAGE_DOCKERHUB="$REGISTRY_DOCKERHUB/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME"
+            TAG="${{ needs.prepare.outputs.tag }}-${{ matrix.arch }}"
+
+            # Production build (default, no shell)
+            podman build \
+              --format docker \
+              --ulimit nofile=65536:65536 \
+              --build-arg NPM_CONFIG_MAXSOCKETS=5 \
+              -f Containerfile \
+              -t "$IMAGE_GHCR:$TAG" \
+              -t "$IMAGE_DOCKERHUB:$TAG" .
+
+            # Push to registries if not skipped
+            if [[ "${{ needs.prepare.outputs.skip_push }}" != "true" ]]; then
+              podman push "$IMAGE_GHCR:$TAG"
+              podman push "$IMAGE_DOCKERHUB:$TAG"
+            else
+              echo "Skipping push (skip_push=true)"
+            fi
+
+  manifest:
+    name: Create multi-arch manifest
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install podman-static for heredoc support
+        run: |
+          echo "=== Installing podman-static v5.6.2 ==="
+          curl -fsSL -o /tmp/podman-linux-amd64.tar.gz \
+            https://github.com/mgoltzsche/podman-static/releases/latest/download/podman-linux-amd64.tar.gz
+          cd /tmp && tar -xzf podman-linux-amd64.tar.gz
+          sudo cp -f podman-linux-amd64/usr/local/bin/* /usr/bin/
+          sudo cp -r podman-linux-amd64/etc/* /etc/ 2>/dev/null || true
+          podman system migrate
+          echo "Podman installed to: $(which podman)"
+          podman --version
+
+      - name: Login to GHCR
+        if: needs.prepare.outputs.skip_push != 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login "$REGISTRY_GHCR" \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Login to Docker Hub
+        if: needs.prepare.outputs.skip_push != 'true'
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | podman login "$REGISTRY_DOCKERHUB" \
+            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
+            --password-stdin
+
+      - name: Create & push multi-arch manifest
+        if: needs.prepare.outputs.skip_push != 'true'
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          exponential_backoff: true
+          command: |
+            IMAGE_GHCR="$REGISTRY_GHCR/${{ github.repository_owner }}/$IMAGE_NAME"
+            IMAGE_DOCKERHUB="$REGISTRY_DOCKERHUB/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME"
+            TAG="${{ needs.prepare.outputs.tag }}"
+
+            # Create manifests
+            podman manifest create "$IMAGE_GHCR:$TAG" || true
+            podman manifest create "$IMAGE_DOCKERHUB:$TAG" || true
+
+            # Add architecture-specific images
+            podman manifest add "$IMAGE_GHCR:$TAG" "docker://$IMAGE_GHCR:$TAG-amd64"
+            podman manifest add "$IMAGE_GHCR:$TAG" "docker://$IMAGE_GHCR:$TAG-arm64"
+
+            podman manifest add "$IMAGE_DOCKERHUB:$TAG" "docker://$IMAGE_DOCKERHUB:$TAG-amd64"
+            podman manifest add "$IMAGE_DOCKERHUB:$TAG" "docker://$IMAGE_DOCKERHUB:$TAG-arm64"
+
+            # Push manifests
+            podman manifest push --all "$IMAGE_GHCR:$TAG"
+            podman manifest push --all "$IMAGE_DOCKERHUB:$TAG"
+
+      - name: Output build summary
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: ${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release**: ${{ needs.prepare.outputs.is_release }}" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.prepare.outputs.skip_push }}" != "true" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Registry URLs" >> $GITHUB_STEP_SUMMARY
+            echo "- **GHCR**: \`$REGISTRY_GHCR/${{ github.repository_owner }}/$IMAGE_NAME:${{ needs.prepare.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Docker Hub**: \`$REGISTRY_DOCKERHUB/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:${{ needs.prepare.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Pull Commands" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "# GHCR" >> $GITHUB_STEP_SUMMARY
+            echo "podman pull $REGISTRY_GHCR/${{ github.repository_owner }}/$IMAGE_NAME:${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Docker Hub" >> $GITHUB_STEP_SUMMARY
+            echo "podman pull $REGISTRY_DOCKERHUB/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:${{ needs.prepare.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Pushed**: No (skip_push=true)" >> $GITHUB_STEP_SUMMARY
+          fi
