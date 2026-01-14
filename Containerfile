@@ -23,11 +23,13 @@ update-ca-certificates
 EOT
 
 # Install bun using official distroless image (best practice)
-COPY --from=docker.io/oven/bun:slim /usr/local/bin/bun /usr/local/bin/
+COPY --from=docker.io/oven/bun:slim /usr/local/bin/bun /usr/local/bin/bun
 
 RUN <<EOT
 # Create app directory and set ownership
 mkdir /app && chmod -R 2755 /app && chown -R node:node /app
+# Create symlink for bunx (will be preserved when copied to runtime)
+ln -s /usr/local/bin/bun /usr/local/bin/bunx
 EOT
 
 # Add main project and install it
@@ -36,9 +38,10 @@ COPY --chown=node:node package.json bun.lockb* /app/
 # Then, add the rest of the project source code and install it
 COPY --chown=node:node ./src /app/src
 
-RUN <<EOT
+RUN --mount=type=cache,target=/home/node/.bun/install/cache,uid=1000,gid=1000 <<EOT
 # Use system CA certificates for Bun (required for GitHub Actions CI)
 # Bun v1.2.23+ supports --use-system-ca flag
+# Cache mount speeds up repeated builds by caching Bun's package cache
 su node -c 'cd /app \
   && bun install --frozen-lockfile --use-system-ca'
 
@@ -54,22 +57,18 @@ EOT
 ARG RUNTIME_TAG=latest-dev
 FROM cgr.dev/chainguard/glibc-dynamic:${RUNTIME_TAG} AS runtime
 
-# Install curl for HEALTHCHECK (requires latest-dev with apk)
-# Note: This step only works with RUNTIME_TAG=latest-dev
+# Temporarily switch to root for file operations
 USER root
-RUN apk add --no-cache curl
 
 # Copy tini from builder (Wolfi doesn't include it)
 COPY --from=builder /usr/bin/tini-static /usr/bin/tini
 
-# Install bun using official distroless image (best practice)
-COPY --from=docker.io/oven/bun:slim /usr/local/bin/bun /usr/local/bin/bun
+# Copy bun and bunx from builder (bunx is a symlink created in builder, preserved during copy)
+COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=builder /usr/local/bin/bunx /usr/local/bin/bunx
 
 # Copy the application from the builder
 COPY --from=builder --chown=65532:65532 /app /app
-
-# Create symlink for bunx
-RUN ln -sf ./bun /usr/local/bin/bunx
 
 # Switch to non-root user (Wolfi default: 65532)
 USER 65532:65532
@@ -83,23 +82,23 @@ ENV BUN_INSTALL="/home/nonroot/.bun" \
 ENV MCP_PORT=3000
 EXPOSE 3000
 
-# Health check endpoint (requires curl from apk)
+# Health check endpoint (uses Bun native fetch, works with both latest and latest-dev)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/healthz || exit 1
+  CMD bun -e "fetch('http://localhost:3000/healthz').then(r => process.exit(r.ok ? 0 : 1))" || exit 1
 
 ENTRYPOINT ["tini", "--"]
-CMD ["bun", "run", "server"]
+# Use direct file path instead of npm script to work without shell
+CMD ["bun", "run", "/app/src/index.ts"]
 
 # ==========================================================================
 # USAGE NOTES
 # ==========================================================================
 #
-# Default build (latest-dev with curl for HEALTHCHECK):
+# Default build (latest-dev for debugging):
 #   podman build -t mcp-taipei-metro:latest .
 #
-# Production build (latest, no curl, no HEALTHCHECK):
+# Production build (latest for minimal size):
 #   podman build --build-arg RUNTIME_TAG=latest -t mcp-taipei-metro:prod .
-#   Note: HEALTHCHECK will fail in production, use external health checks
 #
 # Security benefits of Wolfi glibc-dynamic:
 #   - CVE-free by design (Chainguard security updates)
@@ -107,9 +106,17 @@ CMD ["bun", "run", "server"]
 #   - Non-root user by default (UID 65532)
 #   - Only necessary packages installed
 #
+# HEALTHCHECK implementation:
+#   - Uses Bun native fetch() API (no external dependencies)
+#   - Works with both latest and latest-dev runtime tags
+#   - No need for curl or other HTTP client tools
+#
+# Build cache optimization:
+#   - Bun install uses BuildKit cache mount for faster rebuilds
+#   - Cache persists between builds in /home/node/.bun/install/cache
+#
 # Why latest-dev?
 #   - PoC project prioritizes functionality over minimal size
-#   - Enables HEALTHCHECK with curl
-#   - Allows debugging with shell access
-#   - Production migration: switch to :latest + external health checks
+#   - Allows debugging with shell access (sh/ash available)
+#   - Production migration: switch to :latest for smallest attack surface
 #
