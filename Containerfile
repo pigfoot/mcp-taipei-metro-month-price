@@ -28,7 +28,7 @@ COPY --from=docker.io/oven/bun:slim /usr/local/bin/bun /usr/local/bin/bun
 RUN <<EOT
 # Create app directory and set ownership
 mkdir /app && chmod -R 2755 /app && chown -R node:node /app
-# Create symlink for bunx (will be preserved when copied to runtime)
+# Create symlink for bunx (COPY will follow the symlink and copy actual file)
 ln -s /usr/local/bin/bun /usr/local/bin/bunx
 EOT
 
@@ -63,7 +63,7 @@ USER root
 # Copy tini from builder (Wolfi doesn't include it)
 COPY --from=builder /usr/bin/tini-static /usr/bin/tini
 
-# Copy bun and bunx from builder (bunx is a symlink created in builder, preserved during copy)
+# Copy bun and bunx from builder (bunx symlink is followed by COPY, becomes full file)
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=builder /usr/local/bin/bunx /usr/local/bin/bunx
 

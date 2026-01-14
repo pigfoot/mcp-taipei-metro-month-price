@@ -97,5 +97,7 @@ scratch-*.*
 # Project specific: Cache files with backups
 data/calendar-cache.json
 data/calendar-cache.json.backup.*
+data/calendar-cache.backup.*.json
 data/fare-cache.json
 data/fare-cache.json.backup.*
+data/fare-cache.backup.*.json

@@ -16,7 +16,7 @@ export class CalendarFetcher {
   private static readonly DATA_SOURCES = [
     {
       name: 'data.gov.tw - 政府行政機關辦公日曆表',
-      url: 'https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/2025.json',
+      url: 'https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/{year}.json',
       format: 'json' as const,
     },
     {
@@ -37,7 +37,7 @@ export class CalendarFetcher {
     for (const source of CalendarFetcher.DATA_SOURCES) {
       try {
         console.log(`Fetching calendar data from ${source.name}...`);
-        const url = source.url.replace('2025', String(targetYear));
+        const url = source.url.replace('{year}', String(targetYear));
 
         const response = await fetch(url, {
           headers: {
